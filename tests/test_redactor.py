@@ -42,6 +42,6 @@ def test_redact_dict_bearer_value():
 
 
 def test_terminal_formatter_redacts_secrets():
-    text = format_terminal_logs([{"content": "PENTAGI_API_TOKEN=abc", "createdAt": "now"}])
+    text = format_terminal_logs([{"text": "PENTAGI_API_TOKEN=abc", "type": "cmd", "createdAt": "now"}])
     assert "abc" not in text
     assert "***" in text
