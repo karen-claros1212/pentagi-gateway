@@ -1,4 +1,7 @@
-"""Telegram handlers: natural-language first, commands as fallback."""
+"""Telegram handlers: natural-language first, commands as fallback.
+
+Updated with UI State Machine adapter (patch 8).
+"""
 
 from __future__ import annotations
 
@@ -36,23 +39,61 @@ class CommandHandlers:
 
     async def _handle_ui_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, data: str) -> None:
         action = data.removeprefix("ui:")
-        mapping = {
+        # Legacy mappings
+        legacy = {
             "list_flows": "list_flows",
             "providers": "list_providers",
-            "gateway_status": "gateway_status",
             "active_status": "get_flow_status",
             "summary": "get_flow_summary",
-            "tasks": "get_tasks",
             "findings": "get_recent_findings",
             "logs": "get_logs",
             "terminal": "get_terminal",
             "stop_local": "stop_local",
-            "send_input_help": "send_input_help",
             "help": "help",
         }
-        routed = mapping.get(action, "help")
-        payload = {"message": help_text()} if routed == "help" else {}
-        await self._dispatch.handle_command_action(update, ctx, routed, payload)
+        if action in legacy:
+            await self._dispatch.handle_command_action(update, ctx, legacy[action], {"message": help_text()})
+            return
+
+        # New UI screen callbacks
+        ui_mapping = {
+            "home": ("help_ui", {}),
+            "new_flow": ("help_ui", {"screen": "new_flow_draft"}),
+            "flows": ("list_flows", {}),
+            "providers": ("list_providers", {}),
+            "templates": ("apply_template", {}),
+            "submit_draft": ("submit_draft", {}),
+            "stop_flow": ("stop_flow", {}),
+            "input": ("help_ui", {"message": "Escribe el input para el flow."}),
+            "terminal": ("view_terminal", {}),
+            "tasks": ("get_tasks", {}),
+            "logs": ("get_logs", {}),
+            "findings": ("get_recent_findings", {}),
+            "summary": ("get_flow_summary", {}),
+            "report": ("get_recent_findings", {}),
+            "status": ("get_flow_status", {}),
+            "assistant": ("view_assistant", {}),
+            "help": ("help", {}),
+        }
+        if action.startswith("select_provider:"):
+            provider_name = action.split(":", 1)[1] if ":" in action else ""
+            await self._dispatch.handle_command_action(
+                update, ctx, "set_provider",
+                {"provider": provider_name}, risk="LOW",
+            )
+            return
+        if action.startswith("select_template:"):
+            tid = action.split(":", 1)[1] if ":" in action else ""
+            await self._dispatch.handle_command_action(
+                update, ctx, "apply_template",
+                {"template_id": tid}, risk="LOW",
+            )
+            return
+        if action in ui_mapping:
+            mapped_action, payload = ui_mapping[action]
+            await self._dispatch.handle_command_action(update, ctx, mapped_action, payload)
+            return
+        await self._dispatch.handle_command_action(update, ctx, "help", {"message": help_text()})
 
     async def _handle_flow_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, data: str) -> None:
         parts = data.split(":", 2)
@@ -67,9 +108,6 @@ class CommandHandlers:
             "tasks": "get_tasks",
             "logs": "get_logs",
             "terminal": "get_terminal",
-            "findings": "get_recent_findings",
-            "send_help": "send_input_help",
-            "stop_local": "stop_local",
             "watch": "watch_flow",
             "unwatch": "unwatch_flow",
         }

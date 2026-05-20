@@ -36,14 +36,17 @@ async def test_no_active_status_summary_findings_guidance():
 
 
 @pytest.mark.asyncio
-async def test_payload_drops_non_digit_active_flow_id(tmp_path):
+async def test_non_digit_active_flow_id_still_routes_with_flow_ref(tmp_path):
+    """Non-digit flow_id is stored and used; the brain does not reject it."""
     store = SessionStore(str(tmp_path / "guard.sqlite"))
     await store.open()
     dispatcher = Dispatcher(AuthProvider([1]), store, client=MockPentagiClient())
     await store.bind_flow(10, 1, "flow_demo")
     update = FakeUpdate(text="qué está haciendo")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    assert NO_ACTIVE_FLOW_TEXT in update.message.replies[-1]
+    # With an active flow (even non-numeric), the dispatcher should proceed
+    assert "Demo" in update.message.replies[-1] or "Resumen" in update.message.replies[-1]
+    assert NO_ACTIVE_FLOW_TEXT not in update.message.replies[-1]
     await store.close()
 
 

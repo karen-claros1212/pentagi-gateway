@@ -18,6 +18,14 @@ class TelegramSession:
     mode: str = "READ_ONLY"
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    # UI state fields (patch 8)
+    active_flow_status: str | None = None
+    selected_provider: str | None = None
+    selected_assistant_id: str | None = None
+    draft_message: str | None = None
+    draft_template_id: str | None = None
+    last_screen: str = "home"
+    last_snapshot_at: float | None = None
 
 
 @dataclass
@@ -58,6 +66,13 @@ class SessionStore:
                 mode TEXT NOT NULL DEFAULT 'READ_ONLY',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
+                active_flow_status TEXT,
+                selected_provider TEXT,
+                selected_assistant_id TEXT,
+                draft_message TEXT,
+                draft_template_id TEXT,
+                last_screen TEXT NOT NULL DEFAULT 'home',
+                last_snapshot_at REAL,
                 PRIMARY KEY (chat_id, user_id)
             );
             CREATE TABLE IF NOT EXISTS audit_events (
@@ -94,7 +109,30 @@ class SessionStore:
             );
             """
         )
+        # Migration: add UI columns if missing (backward compat)
+        await self._migrate_ui_fields()
         await self.conn.commit()
+
+    async def _migrate_ui_fields(self) -> None:
+        """Add UI state columns on existing tables if they don't exist."""
+        existing_cols = set()
+        cursor = await self.conn.execute("PRAGMA table_info(telegram_sessions)")
+        for row in await cursor.fetchall():
+            existing_cols.add(row["name"])
+        ui_columns = {
+            "active_flow_status": "TEXT",
+            "selected_provider": "TEXT",
+            "selected_assistant_id": "TEXT",
+            "draft_message": "TEXT",
+            "draft_template_id": "TEXT",
+            "last_screen": "TEXT NOT NULL DEFAULT 'home'",
+            "last_snapshot_at": "REAL",
+        }
+        for col_name, col_type in ui_columns.items():
+            if col_name not in existing_cols:
+                await self.conn.execute(
+                    f"ALTER TABLE telegram_sessions ADD COLUMN {col_name} {col_type}"
+                )
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -120,13 +158,25 @@ class SessionStore:
     async def upsert_session(self, session: TelegramSession) -> None:
         session.updated_at = time.time()
         await self.conn.execute(
-            """INSERT INTO telegram_sessions (chat_id, user_id, role, active_flow_id, mode, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO telegram_sessions (
+                   chat_id, user_id, role, active_flow_id, mode,
+                   created_at, updated_at,
+                   active_flow_status, selected_provider, selected_assistant_id,
+                   draft_message, draft_template_id, last_screen, last_snapshot_at
+               )
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(chat_id, user_id) DO UPDATE SET
                    role=excluded.role,
                    active_flow_id=excluded.active_flow_id,
                    mode=excluded.mode,
-                   updated_at=excluded.updated_at""",
+                   updated_at=excluded.updated_at,
+                   active_flow_status=excluded.active_flow_status,
+                   selected_provider=excluded.selected_provider,
+                   selected_assistant_id=excluded.selected_assistant_id,
+                   draft_message=excluded.draft_message,
+                   draft_template_id=excluded.draft_template_id,
+                   last_screen=excluded.last_screen,
+                   last_snapshot_at=excluded.last_snapshot_at""",
             (
                 session.chat_id,
                 session.user_id,
@@ -135,6 +185,13 @@ class SessionStore:
                 session.mode,
                 session.created_at,
                 session.updated_at,
+                session.active_flow_status,
+                session.selected_provider,
+                session.selected_assistant_id,
+                session.draft_message,
+                session.draft_template_id,
+                session.last_screen,
+                session.last_snapshot_at,
             ),
         )
         await self.conn.commit()

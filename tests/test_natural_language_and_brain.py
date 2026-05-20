@@ -102,7 +102,7 @@ async def test_llm_invalid_json_unknown(monkeypatch):
 @pytest.mark.asyncio
 async def test_llm_cannot_bypass_policy_direct_execute(tmp_path):
     class UnsafeBrain:
-        async def classify(self, text, active_flow_id=None):
+        async def classify(self, text, active_flow_id=None, context=None):
             from gateway.llm.schemas import IntentDecision
 
             return IntentDecision(intent="CREATE_FLOW_REQUEST", risk="LOW", requires_confirmation=False, action="create_flow")

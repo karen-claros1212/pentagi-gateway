@@ -1,4 +1,7 @@
-"""Telegram message formatters and inline keyboard builders."""
+"""Telegram message formatters and inline keyboard builders.
+
+Includes UI screen functions for the state machine adapter (patch 8).
+"""
 
 from __future__ import annotations
 
@@ -7,6 +10,7 @@ from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ..core.approvals import Approval
+from ..core.session import TelegramSession
 from ..security import redact
 
 MAX_TELEGRAM = 3500
@@ -16,6 +20,10 @@ NO_ACTIVE_FLOW_TEXT = (
     "Elige un flow para operar con resumen, tareas, logs, terminal y hallazgos."
 )
 SAFE_ERROR_TEXT = "Ocurrió un error seguro. No se ejecutó ninguna acción en PentAGI."
+
+# ---------------------------------------------------------------------------
+# Utility helpers
+# ---------------------------------------------------------------------------
 
 
 def truncate(text: str, limit: int = MAX_TELEGRAM, suffix: str = "\n\n... (truncated)") -> str:
@@ -29,6 +37,182 @@ def provider_label(provider: dict[str, Any] | str | None) -> str:
     name = provider.get("name") or provider.get("provider") or "provider"
     provider_type = provider.get("type")
     return f"{name} ({provider_type})" if provider_type else str(name)
+
+
+# ---------------------------------------------------------------------------
+# UI Screen Functions  (patch 8)
+# ---------------------------------------------------------------------------
+
+
+def home_screen(session: TelegramSession, providers: list[dict[str, Any]], templates: list[dict[str, Any]]) -> tuple[str, InlineKeyboardMarkup]:
+    """Pantalla principal con navegación a todas las secciones."""
+    parts = ["🏠 *PentAGI Gateway*"]
+    if session.active_flow_id:
+        status = session.active_flow_status or "unknown"
+        parts.append(f"Flow activo: `{session.active_flow_id}` [{status}]")
+    else:
+        parts.append("Sin flow activo.")
+    if session.selected_provider:
+        parts.append(f"Provider: {session.selected_provider}")
+    text = "\n".join(parts)
+    kb = [
+        [InlineKeyboardButton("📋 Flows", callback_data="ui:flows"),
+         InlineKeyboardButton("🔌 Providers", callback_data="ui:providers")],
+        [InlineKeyboardButton("✅ Nuevo Flow", callback_data="ui:new_flow"),
+         InlineKeyboardButton("📝 Templates", callback_data="ui:templates")],
+    ]
+    if session.active_flow_id:
+        kb.append([
+            InlineKeyboardButton("📊 Estado", callback_data="ui:status"),
+            InlineKeyboardButton("🛑 Detener", callback_data="ui:stop_flow"),
+        ])
+    kb.append([InlineKeyboardButton("❓ Ayuda", callback_data="ui:help")])
+    return text, InlineKeyboardMarkup(kb)
+
+
+def new_flow_draft_screen(session: TelegramSession, providers: list[dict[str, Any]], templates: list[dict[str, Any]]) -> tuple[str, InlineKeyboardMarkup]:
+    """Formulario para crear un nuevo flow: objetivo + provider + template."""
+    parts = ["✏️ *Nuevo Flow*"]
+    if session.draft_message:
+        parts.append(f"Objetivo: `{session.draft_message[:200]}`")
+    else:
+        parts.append("Escribe tu objetivo para el nuevo flow.")
+    parts.append(f"Provider: {session.selected_provider or 'no seleccionado'}")
+    parts.append(f"Template: {session.draft_template_id or 'ninguno'}")
+    text = "\n".join(parts)
+    kb = [
+        [InlineKeyboardButton("Seleccionar Provider", callback_data="ui:providers")],
+        [InlineKeyboardButton("Seleccionar Template", callback_data="ui:templates")],
+    ]
+    if session.draft_message:
+        kb.append([InlineKeyboardButton("✅ Enviar Draft", callback_data="ui:submit_draft")])
+    kb.append([InlineKeyboardButton("🔙 Volver", callback_data="ui:home")])
+    return text, InlineKeyboardMarkup(kb)
+
+
+def active_flow_running_screen(
+    flow: dict[str, Any] | None,
+    tasks: list[dict[str, Any]],
+    logs: list[dict[str, Any]],
+    session: TelegramSession,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Estado del flow en ejecución + tareas + logs recientes."""
+    title = flow.get("title") or flow.get("name") if flow else session.active_flow_id or "?"
+    status = flow.get("status") if flow else session.active_flow_status or "unknown"
+    parts = [
+        f"⚙️ *Flow: {title}*",
+        f"Estado: {status}",
+        f"Tareas: {len(tasks)}",
+    ]
+    if logs:
+        recent = logs[-3:]
+        for entry in recent:
+            msg = str(entry.get("message") or entry.get("content") or entry.get("text") or "")[:120]
+            if msg:
+                parts.append(f"> {msg}")
+    text = truncate("\n".join(parts))
+    flow_id = session.active_flow_id or ""
+    kb = [
+        [InlineKeyboardButton("🖥 Terminal", callback_data="ui:terminal"),
+         InlineKeyboardButton("📋 Tareas", callback_data="ui:tasks")],
+        [InlineKeyboardButton("📝 Logs", callback_data="ui:logs"),
+         InlineKeyboardButton("🔍 Hallazgos", callback_data="ui:findings")],
+        [InlineKeyboardButton("🛑 Detener", callback_data="ui:stop_flow"),
+         InlineKeyboardButton("✉️ Enviar Input", callback_data="ui:input")],
+        [InlineKeyboardButton("🔙 Home", callback_data="ui:home")],
+    ]
+    return text, InlineKeyboardMarkup(kb)
+
+
+def flow_waiting_screen(flow: dict[str, Any] | None, session: TelegramSession) -> tuple[str, InlineKeyboardMarkup]:
+    """PentAGI espera input del usuario."""
+    title = flow.get("title") or flow.get("name") if flow else session.active_flow_id or "?"
+    text = f"⏳ *{title}* espera tu input.\n\nEscribe tu respuesta ahora o usa los botones."
+    kb = [
+        [InlineKeyboardButton("✉️ Enviar Input", callback_data="ui:input")],
+        [InlineKeyboardButton("🖥 Terminal", callback_data="ui:terminal"),
+         InlineKeyboardButton("🔙 Home", callback_data="ui:home")],
+    ]
+    return text, InlineKeyboardMarkup(kb)
+
+
+def flow_finished_screen(flow: dict[str, Any] | None, tasks: list[dict[str, Any]]) -> tuple[str, InlineKeyboardMarkup]:
+    """Flow finalizado con reporte."""
+    title = flow.get("title") or flow.get("name") if flow else "Flow"
+    parts = [f"✅ *{title} completado*"]
+    findings = [t for t in tasks if t.get("result") or t.get("content")]
+    if findings:
+        for f_item in findings[-5:]:
+            snippet = redact(str(f_item.get("result") or f_item.get("content") or ""))[:160]
+            parts.append(f"• {snippet}")
+    text = truncate("\n".join(parts))
+    kb = [
+        [InlineKeyboardButton("📋 Hallazgos", callback_data="ui:findings")],
+        [InlineKeyboardButton("📝 Resumen", callback_data="ui:summary"),
+         InlineKeyboardButton("📊 Reporte", callback_data="ui:report")],
+        [InlineKeyboardButton("✅ Nuevo Flow", callback_data="ui:new_flow"),
+         InlineKeyboardButton("🔙 Home", callback_data="ui:home")],
+    ]
+    return text, InlineKeyboardMarkup(kb)
+
+
+def assistant_screen(assistants: list[dict[str, Any]], logs: list[dict[str, Any]]) -> tuple[str, InlineKeyboardMarkup]:
+    """Pantalla de asistente conversacional."""
+    parts = ["💬 *Asistente*"]
+    if logs:
+        for entry in logs[-5:]:
+            role = entry.get("role", "?")
+            msg = str(entry.get("message") or entry.get("content") or "")[:120]
+            parts.append(f"*{role}*: {msg}")
+    else:
+        parts.append("Escribe tu mensaje para el asistente.")
+    text = truncate("\n".join(parts))
+    kb = [
+        [InlineKeyboardButton("🔙 Home", callback_data="ui:home")],
+    ]
+    return text, InlineKeyboardMarkup(kb)
+
+
+def provider_select_screen(providers: list[dict[str, Any]], selected: str | None) -> tuple[str, InlineKeyboardMarkup]:
+    """Lista seleccionable de providers."""
+    if not providers:
+        return "No hay providers disponibles.", InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Home", callback_data="ui:home")]])
+    parts = ["🔌 *Selecciona un Provider:*"]
+    parts.append(f"Actual: {selected or 'ninguno'}")
+    text = "\n".join(parts)
+    kb = []
+    for p in providers:
+        name = provider_label(p)
+        button_text = f"{'✅ ' if name == selected else '➡️ '}{name}"
+        kb.append([InlineKeyboardButton(button_text, callback_data=f"ui:select_provider:{name}")])
+    kb.append([InlineKeyboardButton("🔙 Home", callback_data="ui:home")])
+    return text, InlineKeyboardMarkup(kb)
+
+
+def template_select_screen(templates: list[dict[str, Any]], selected: str | None) -> tuple[str, InlineKeyboardMarkup]:
+    """Lista seleccionable de templates."""
+    parts = ["📝 *Selecciona un Template:*"]
+    parts.append(f"Actual: {selected or 'ninguno'}")
+    text = "\n".join(parts)
+    kb = []
+    for t in templates:
+        tid = str(t.get("id") or t.get("name") or "?")
+        label = str(t.get("name") or t.get("title") or tid)[:32]
+        button_text = f"{'✅ ' if tid == selected else '➡️ '}{label}"
+        kb.append([InlineKeyboardButton(button_text, callback_data=f"ui:select_template:{tid}")])
+    kb.append([InlineKeyboardButton("🔙 Home", callback_data="ui:home")])
+    return text, InlineKeyboardMarkup(kb)
+
+
+def error_screen(error_msg: str) -> str:
+    """Mensaje de error limpio sin traceback."""
+    safe = redact(str(error_msg))[:300]
+    return f"⚠️ *Error*\n{safe}\n\nSi el problema persiste contacta al administrador."
+
+
+# ---------------------------------------------------------------------------
+# Legacy formatters — kept for callers that still reference them by name
+# ---------------------------------------------------------------------------
 
 
 def main_menu_markup() -> InlineKeyboardMarkup:

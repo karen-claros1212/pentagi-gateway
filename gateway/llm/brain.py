@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 import httpx
 from pydantic import ValidationError
@@ -14,26 +15,40 @@ from pydantic import ValidationError
 from .schemas import MUTATION_INTENTS, Intent, IntentDecision
 
 
-NO_ACTIVE_FLOW_TEXT = (
-    "Ahora no tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles "
-    "para que elijas uno y desde ahí revisar estado, tareas, logs, hallazgos o resumen."
-)
-UNKNOWN_GUIDANCE = (
-    "No entendí del todo el contexto. Puedes hablarme natural: mostrar flows, abrir flow 123, "
-    "resumir el flow activo, revisar hallazgos o ver providers."
-)
-GREETING_TEXT = (
-    "Hola. Soy el operador Telegram de PentAGI Gateway. Te ayudo a trabajar con PentAGI como en la UI: "
-    "flows, providers, tareas, logs, hallazgos y acciones seguras según el modo del Gateway."
-)
-IDENTITY_TEXT = (
-    "Soy PentAGI Gateway: una capa operadora entre Telegram y PentAGI. Mantengo el contexto del flow activo, "
-    "aplico política de seguridad y convierto tus mensajes en acciones equivalentes a la UI cuando están permitidas."
-)
-CAPABILITIES_TEXT = (
-    "Puedo mostrar y vincular flows, resumir actividad, revisar tareas, logs, terminal y hallazgos, listar providers "
-    "y preparar acciones como crear, detener o enviar instrucciones solo si el modo y la aprobación lo permiten."
-)
+NO_ACTIVE_FLOW_TEXT = "No tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles."
+UNKNOWN_GUIDANCE = "No entendí. Puedes pedirme: mostrar flows, abrir flow <id>, resumir el flow activo o revisar hallazgos."
+
+
+class BrainContext:
+    """Rich context for intent classification."""
+
+    def __init__(
+        self,
+        text: str = "",
+        flow_status: str | None = None,
+        providers: list[dict[str, Any]] | None = None,
+        assistants: list[dict[str, Any]] | None = None,
+        tasks_count: int = 0,
+        recent_logs: list[dict[str, Any]] | None = None,
+        gateway_mode: str = "READ_ONLY",
+        last_screen: str = "home",
+        draft_message: str | None = None,
+        selected_provider: str | None = None,
+        selected_assistant_id: str | None = None,
+        active_flow_id: str | None = None,
+    ) -> None:
+        self.text = text
+        self.flow_status = flow_status
+        self.providers = providers or []
+        self.assistants = assistants or []
+        self.tasks_count = tasks_count
+        self.recent_logs = recent_logs or []
+        self.gateway_mode = gateway_mode
+        self.last_screen = last_screen
+        self.draft_message = draft_message
+        self.selected_provider = selected_provider
+        self.selected_assistant_id = selected_assistant_id
+        self.active_flow_id = active_flow_id
 
 
 class Brain:
@@ -51,16 +66,34 @@ class Brain:
         self.api_key = api_key
         self.model = model
 
-    async def classify(self, text: str, active_flow_id: str | None = None) -> IntentDecision:
+    async def classify(self, text: str, active_flow_id: str | None = None, context: BrainContext | None = None) -> IntentDecision:
+        if context is None:
+            if active_flow_id:
+                context = BrainContext(text=text, active_flow_id=active_flow_id)
+            else:
+                context = BrainContext(text=text)
+        else:
+            context.text = text
+            if active_flow_id:
+                context.active_flow_id = active_flow_id
         if self.enabled:
-            return await self._classify_llm(text, active_flow_id)
-        return self._classify_local(text, active_flow_id)
+            return await self._classify_llm(text, active_flow_id, context)
+        return self._classify_local(text, active_flow_id, context)
 
-    async def _classify_llm(self, text: str, active_flow_id: str | None) -> IntentDecision:
+    async def _classify_llm(self, text: str, active_flow_id: str | None, context: BrainContext) -> IntentDecision:
+        ctx_summary = (
+            f"flow_status={context.flow_status!r}, "
+            f"providers_count={len(context.providers)}, "
+            f"assistants_count={len(context.assistants)}, "
+            f"tasks_count={context.tasks_count}, "
+            f"gateway_mode={context.gateway_mode!r}, "
+            f"last_screen={context.last_screen!r}, "
+            f"has_draft={context.draft_message is not None}"
+        )
         prompt = (
             "Return ONLY JSON matching: intent,risk,requires_confirmation,flow_ref,action,user_response,parameters. "
-            "Never execute. Mutation intents require confirmation. Text: "
-            f"{text!r}; active_flow_id={active_flow_id!r}"
+            "Never execute. Mutation intents require confirmation. "
+            f"Text: {text!r}; active_flow_id={active_flow_id!r}; context: {ctx_summary}"
         )
         headers = {"Content-Type": "application/json"}
         if self.api_key:
@@ -86,31 +119,49 @@ class Brain:
             return IntentDecision(intent=Intent.UNKNOWN, user_response=UNKNOWN_GUIDANCE)
         return _enforce_safety(decision)
 
-    def _classify_local(self, text: str, active_flow_id: str | None) -> IntentDecision:
+    def _classify_local(self, text: str, active_flow_id: str | None, context: BrainContext) -> IntentDecision:
         t = text.strip()
         low = t.lower()
         flow_id = _extract_flow_id(t) or active_flow_id
         if not t:
-            return IntentDecision(intent=Intent.GREETING, user_response=GREETING_TEXT)
-        normalized = _strip_accents(low)
-        if _is_greeting(normalized):
-            return IntentDecision(intent=Intent.GREETING, user_response=GREETING_TEXT)
-        if any(x in normalized for x in ("quien eres", "que eres", "quien sos", "quien es pentagi gateway")):
-            return IntentDecision(intent=Intent.WHO_ARE_YOU, user_response=IDENTITY_TEXT)
-        if any(x in normalized for x in ("que puedes hacer", "que haces", "capacidades", "capabilities")):
-            return IntentDecision(intent=Intent.CAPABILITIES, user_response=CAPABILITIES_TEXT)
-        if any(w in low for w in ("ayuda", "help", "/help")):
-            return IntentDecision(intent=Intent.CONTEXT_HELP, user_response=CAPABILITIES_TEXT)
+            return IntentDecision(intent=Intent.UNKNOWN, user_response="¿Qué necesitas hacer?")
+
+        # --- UI state commands (new intents) ---
+        if any(x in low for x in ("ayuda", "help", "/help")):
+            if context.last_screen and context.last_screen != "home":
+                return IntentDecision(intent=Intent.HELP_UI, parameters={"screen": context.last_screen})
+            return IntentDecision(intent=Intent.HELP)
+
         if "proveedor" in low or "providers" in low:
             return IntentDecision(intent=Intent.LIST_PROVIDERS)
+        if "seleccionar proveedor" in low or "selecciona proveedor" in low:
+            return IntentDecision(intent=Intent.SET_PROVIDER, parameters={"provider": _extract_provider(t)})
+        if "plantilla" in low or "template" in low:
+            return IntentDecision(intent=Intent.APPLY_TEMPLATE, parameters={"template_id": _extract_template_id(t)})
+
+        # Flow listing / status
         if "muéstrame los flows" in low or "lista flows" in low or "flujos" in low or "flows" in low:
             return IntentDecision(intent=Intent.LIST_FLOWS)
         if any(x in low for x in ("abre este flow", "abre flow", "abrir flow", "bind", "vincula")) and flow_id:
             return IntentDecision(intent=Intent.BIND_FLOW, flow_ref=flow_id)
-        if any(x in low for x in ("qué está haciendo", "que esta haciendo", "quién está trabajando", "quien esta trabajando", "actividad", "trabajando", "estado", "status")):
+        if any(x in low for x in ("qué está haciendo", "que esta haciendo", "estado", "status")):
             if flow_id:
                 return IntentDecision(intent=Intent.GET_FLOW_STATUS, flow_ref=flow_id)
             return IntentDecision(intent=Intent.UNKNOWN, user_response=NO_ACTIVE_FLOW_TEXT)
+
+        # Draft / new flow
+        if any(x in low for x in ("nuevo flow", "nuevo flujo", "crea", "crear flow", "nuevo objetivo", "new flow", "empezar")):
+            return IntentDecision(intent=Intent.SUBMIT_DRAFT, action="create_flow", parameters={"prompt": t})
+
+        # Terminal / assistant views
+        if any(x in low for x in ("terminal", "ver terminal", "consola")) and flow_id:
+            return IntentDecision(intent=Intent.VIEW_TERMINAL, flow_ref=flow_id)
+        if any(x in low for x in ("asistente", "assistant", "ver assistant", "assistant mode")):
+            return IntentDecision(intent=Intent.VIEW_ASSISTANT)
+        if "envía al assistant" in low or "envia al assistant" in low or "pregunta al assistant" in low:
+            return IntentDecision(intent=Intent.SEND_ASSISTANT_MESSAGE, action="call_assistant", parameters={"message": t})
+
+        # Existing intents (maintain backward compat)
         if "resume" in low or "resumen" in low or "summary" in low:
             if flow_id:
                 return IntentDecision(intent=Intent.GET_FLOW_SUMMARY, flow_ref=flow_id)
@@ -155,6 +206,24 @@ def _extract_flow_id(text: str) -> str | None:
     return None
 
 
+def _extract_provider(text: str) -> str:
+    """Extract provider name from text."""
+    match = re.search(r"(?:proveedor|provider)\s*[:#=]?\s*(\w+)", text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1)
+    # Try to find a known provider name
+    for word in ("qwen", "openai", "anthropic", "gemini", "ollama", "custom", "deepseek", "azure"):
+        if word in text.lower():
+            return word
+    return ""
+
+
+def _extract_template_id(text: str) -> str:
+    """Extract template ID from text."""
+    match = re.search(r"(?:plantilla|template)\s*[:#=]?\s*(\w+)", text, flags=re.IGNORECASE)
+    return match.group(1) if match else ""
+
+
 def _enforce_safety(decision: IntentDecision) -> IntentDecision:
     if decision.intent in MUTATION_INTENTS:
         decision.requires_confirmation = True
@@ -163,22 +232,3 @@ def _enforce_safety(decision: IntentDecision) -> IntentDecision:
         elif decision.risk.upper() not in {"HIGH", "CRITICAL"}:
             decision.risk = "HIGH"
     return decision.normalized()
-
-
-def _strip_accents(text: str) -> str:
-    return (
-        text.replace("á", "a")
-        .replace("é", "e")
-        .replace("í", "i")
-        .replace("ó", "o")
-        .replace("ú", "u")
-        .replace("ü", "u")
-        .replace("ñ", "n")
-    )
-
-
-def _is_greeting(text: str) -> bool:
-    clean = re.sub(r"[^a-z0-9 ]+", " ", text).strip()
-    if clean in {"hola", "buenas", "buenos dias", "buen dia", "buenas tardes", "buenas noches", "hey", "hello", "hi"}:
-        return True
-    return clean.startswith(("hola ", "buenas ")) and len(clean.split()) <= 5
