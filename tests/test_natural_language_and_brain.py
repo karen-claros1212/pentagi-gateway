@@ -35,7 +35,7 @@ async def test_natural_language_list_flows(tmp_path):
 @pytest.mark.asyncio
 async def test_active_flow_status_summary_and_findings(tmp_path):
     dispatcher, store, _client = await make_dispatcher(tmp_path)
-    await store.bind_flow(10, 1, "flow_1234")
+    await store.bind_flow(10, 1, "1234")
     for text, expected in [
         ("qué está haciendo", "Resumen"),
         ("resume el flow", "Resumen"),
@@ -53,7 +53,7 @@ async def test_create_flow_and_send_input_require_approval(tmp_path):
     update = FakeUpdate(text="crea un flow para auditar")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
     assert "Aprobación requerida" in update.message.replies[-1]
-    await store.bind_flow(10, 1, "flow_1234")
+    await store.bind_flow(10, 1, "1234")
     send = FakeUpdate(text="dile que continúe")
     await dispatcher.handle_text(send, FakeContext(), send.message.text)
     assert "Aprobación requerida" in send.message.replies[-1]

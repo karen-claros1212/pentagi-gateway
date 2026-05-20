@@ -8,8 +8,9 @@ class FakeMessage:
         self.text = text
         self.replies: list[str] = []
 
-    async def reply_text(self, text: str) -> None:
+    async def reply_text(self, text: str, **kwargs) -> None:
         self.replies.append(text)
+        self.last_reply_markup = kwargs.get("reply_markup")
 
 
 class FakeCallback:
@@ -38,7 +39,7 @@ class FakeContext:
 class MockPentagiClient:
     def __init__(self) -> None:
         self.mutations: list[tuple[str, dict]] = []
-        self.flows = [{"id": "flow_1234", "name": "Demo", "status": "running", "updatedAt": "now"}]
+        self.flows = [{"id": "1234", "name": "Demo", "status": "running", "updatedAt": "now"}]
         self.tasks = [{"id": "task_1", "name": "Recon", "status": "done", "result": "found safe finding"}]
         self.logs = [{"id": "log_1", "role": "assistant", "content": "Bearer should redact", "createdAt": "2026-01-01T00:00:00"}]
 

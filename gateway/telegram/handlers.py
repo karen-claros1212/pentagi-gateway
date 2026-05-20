@@ -10,7 +10,7 @@ from ..pentagi.client import PentagiClient
 
 
 class CommandHandlers:
-    """Read-only commands plus controlled approval commands."""
+    """Natural language, callbacks and fallback commands."""
 
     def __init__(self, client: PentagiClient, dispatcher: Dispatcher) -> None:
         self._client = client
@@ -22,7 +22,64 @@ class CommandHandlers:
     async def callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
-        await self._dispatch.handle_text(update, ctx, query.data or "")
+        data = query.data or ""
+        if data.startswith("ui:"):
+            await self._handle_ui_callback(update, ctx, data)
+            return
+        if data.startswith("flow:"):
+            await self._handle_flow_callback(update, ctx, data)
+            return
+        if data.startswith("approval:"):
+            await self._handle_approval_callback(update, data)
+            return
+        await self._dispatch.handle_command_action(update, ctx, "help", {"message": help_text()})
+
+    async def _handle_ui_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, data: str) -> None:
+        action = data.removeprefix("ui:")
+        mapping = {
+            "list_flows": "list_flows",
+            "providers": "list_providers",
+            "active_status": "get_flow_status",
+            "summary": "get_flow_summary",
+            "findings": "get_recent_findings",
+            "logs": "get_logs",
+            "terminal": "get_terminal",
+            "stop_local": "stop_local",
+            "help": "help",
+        }
+        await self._dispatch.handle_command_action(update, ctx, mapping.get(action, "help"), {"message": help_text()})
+
+    async def _handle_flow_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, data: str) -> None:
+        parts = data.split(":", 2)
+        if len(parts) != 3:
+            await self._dispatch.handle_command_action(update, ctx, "help", {"message": help_text()})
+            return
+        _, action, flow_id = parts
+        mapping = {
+            "bind": "bind_flow",
+            "status": "get_flow_status",
+            "summary": "get_flow_summary",
+            "tasks": "get_tasks",
+            "logs": "get_logs",
+            "terminal": "get_terminal",
+            "watch": "watch_flow",
+            "unwatch": "unwatch_flow",
+        }
+        await self._dispatch.handle_command_action(update, ctx, mapping.get(action, "get_flow"), {"flow_id": flow_id})
+
+    async def _handle_approval_callback(self, update: Update, data: str) -> None:
+        parts = data.split(":", 2)
+        if len(parts) != 3:
+            return
+        _, action, code = parts
+        if action == "confirm":
+            await self._dispatch.confirm(update, code, delete=False)
+        elif action == "confirm_delete":
+            await self._dispatch.confirm(update, code, delete=True)
+        elif action == "deny":
+            await self._dispatch.deny(update, code)
+        elif action == "detail":
+            await self._dispatch.handle_command_action(update, None, "help", {"message": f"Aprobación pendiente: {code}"})
 
     async def start(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await self.help_cmd(update, ctx)
@@ -55,7 +112,7 @@ class CommandHandlers:
         await self._dispatch.handle_command_action(update, ctx, "unbind_flow")
 
     async def active(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        await self._dispatch.handle_text(update, ctx, "qué está haciendo")
+        await self._dispatch.handle_command_action(update, ctx, "get_flow_status")
 
     async def create_flow(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         prompt = " ".join(ctx.args) if ctx.args else "crear flow"
@@ -111,10 +168,10 @@ class CommandHandlers:
 
 def help_text() -> str:
     return (
-        "🤖 PentAGI Gateway — Natural Language First\n\n"
-        "Ejemplos: 'muéstrame los flows', 'abre este flow <id>', 'resume el flow', "
-        "'qué encontró', 'crea un flow...', 'dile que continúe'.\n\n"
-        "Comandos fallback: /flows /flow /tasks /logs /terminal /bind /summary /report "
+        "🤖 PentAGI Gateway — natural language first\n\n"
+        "Escribe de forma natural: 'muéstrame los flows', 'abre flow 123', "
+        "'resume el flow', 'qué encontró'. Los botones son la vía principal para acciones comunes.\n\n"
+        "Los comandos son fallback técnico: /flows /flow /tasks /logs /terminal /bind /summary /report "
         "/create_flow /send /stop_flow /finish_flow /rename_flow /delete_flow "
-        "/confirm /confirm-delete /deny /watch /unwatch."
+        "/confirm /confirm_delete /deny /watch /unwatch."
     )

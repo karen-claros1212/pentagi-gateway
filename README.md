@@ -15,24 +15,24 @@ Real Telegram is **NO-GO** until `TELEGRAM_BOT_TOKEN` is configured locally. Rea
 - `ASSISTED_EXECUTION`: mutation requests create one-use approvals. Confirmation is required before execution.
 - `LOCKED`: all governed actions are blocked.
 
-`deleteFlow` is extra protected: it requires admin role, `DELETE_FLOW_ENABLED=true`, and `/confirm-delete <code>`. Normal `/confirm` cannot execute delete.
+`deleteFlow` is extra protected: it requires admin role, `DELETE_FLOW_ENABLED=true`, and `/confirm_delete <code>` or the confirm-delete button. Normal `/confirm` cannot execute delete. READ_ONLY blocks sensitive actions.
 
 ## Natural Language First
 
-Natural language is the primary interface; commands are fallback. Offline deterministic examples:
+Natural language and inline buttons are the primary interface; commands are fallback only. Offline deterministic examples:
 
 - `muéstrame los flows` → list flows
-- `abre este flow <id>` → bind active flow and show detail
+- `abre flow 123` → bind active flow and show detail. Flow IDs must be explicit digits; normal words are never inferred as IDs.
 - `qué está haciendo` → active flow status/summary
 - `resume el flow` → active flow summary
 - `qué encontró` → recent findings from tasks/logs
 - `crea un flow...` → approval request, no direct execution
 - `dile que continúe` → input approval for active flow
-- `detén todo` → stop approval for active flow, or clarification
+- `detén todo` → stop approval for active flow, or clarification. `stop_local` only clears local Gateway state and is not PentAGI `stopFlow`.
 - ambiguous text → clarification
 - delete/destructive text → blocked by default
 
-## Commands fallback
+## Buttons primary, commands fallback
 
 Read/report:
 
@@ -48,7 +48,7 @@ Read/report:
 - `/summary <flow_id>`
 - `/report <flow_id>`
 
-Controlled approval commands:
+Controlled approval commands. Prefer approval buttons; commands are fallback:
 
 - `/create_flow <prompt>`
 - `/send <text>`
@@ -57,7 +57,7 @@ Controlled approval commands:
 - `/rename_flow <flow_id> <name>`
 - `/delete_flow <flow_id>`
 - `/confirm <code>`
-- `/confirm-delete <code>`
+- `/confirm_delete <code>`
 - `/deny <code>`
 
 Watcher skeleton:
@@ -142,3 +142,7 @@ async def main():
 asyncio.run(main())
 PY
 ```
+
+## Local stop vs PentAGI stopFlow
+
+The inline `Detener operación local` action only clears the active local session binding. It does not call `stopFlow`, does not send GraphQL, and does not mutate PentAGI. Real `stopFlow` remains a gated mutation requiring `ASSISTED_EXECUTION` plus approval.

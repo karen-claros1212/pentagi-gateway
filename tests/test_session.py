@@ -20,9 +20,9 @@ async def test_store(tmp_path):
     assert got.role == "readonly"
 
     # bind
-    await store.bind_flow(1, 100, "flow_abc")
+    await store.bind_flow(1, 100, "1234")
     got = await store.get_session(1, 100)
-    assert got.active_flow_id == "flow_abc"
+    assert got.active_flow_id == "1234"
 
     # audit
     aid = await store.audit(100, 1, "test", risk="low", allowed=True)

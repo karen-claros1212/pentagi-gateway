@@ -54,7 +54,7 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("rename_flow", h.rename_flow))
         self._app.add_handler(CommandHandler("delete_flow", h.delete_flow))
         self._app.add_handler(CommandHandler("confirm", h.confirm))
-        self._app.add_handler(CommandHandler("confirm-delete", h.confirm_delete))
+        self._app.add_handler(CommandHandler("confirm_delete", h.confirm_delete))
         self._app.add_handler(CommandHandler("deny", h.deny))
         self._app.add_handler(CommandHandler("watch", h.watch))
         self._app.add_handler(CommandHandler("unwatch", h.unwatch))

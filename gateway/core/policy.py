@@ -42,6 +42,7 @@ READ_ACTIONS = {
     "get_flow_summary",
     "get_recent_findings",
     "help",
+    "stop_local",
     "unknown",
 }
 MUTATION_ACTIONS = {
