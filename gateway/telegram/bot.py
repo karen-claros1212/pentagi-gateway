@@ -10,7 +10,7 @@ from ..core.auth import AuthProvider
 from ..core.dispatcher import Dispatcher
 from ..core.session import SessionStore
 from ..pentagi.client import PentagiClient
-from ..security.redactor import redact
+from ..security import redact
 from .handlers import CommandHandlers
 
 logger = logging.getLogger(__name__)
