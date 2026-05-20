@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+*.sqlite
+__pycache__/
+.venv/
+venv/
+logs/
+data/*.sqlite
+.pytest_cache/
+.ruff_cache/
