@@ -73,8 +73,13 @@ class TelegramBot:
             await update.message.reply_text("⛔ Unauthorized.")
 
     async def _on_error(self, update, context) -> None:
-        del update
-        logger.error("Telegram error: %s", redact(str(context.error)))
+        err = redact(str(context.error))
+        logger.error("Telegram error: %s", err)
+        if update and update.effective_message:
+            try:
+                await update.effective_message.reply_text(f"⚠️ Error: {err[:300]}")
+            except Exception:
+                pass
 
     async def start_polling(self) -> None:
         logger.info("Starting Telegram polling ...")
