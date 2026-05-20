@@ -20,18 +20,34 @@ def truncate(text: str, limit: int = MAX_TELEGRAM, suffix: str = "\n\n... (trunc
     return clean if len(clean) <= limit else clean[: limit - len(suffix)] + suffix
 
 
-def provider_label(provider: dict[str, Any]) -> str:
+def provider_label(provider: dict[str, Any] | str | None) -> str:
+    if not isinstance(provider, dict):
+        return str(provider or "-")
     name = provider.get("name") or provider.get("provider") or "provider"
-    model = provider.get("model") or "model?"
-    status = provider.get("status") or "status?"
-    return f"{name} — {model} ({status})"
+    provider_type = provider.get("type")
+    return f"{name} ({provider_type})" if provider_type else str(name)
 
 
 def main_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("Flows", callback_data="ui:list_flows"), InlineKeyboardButton("Providers", callback_data="ui:providers")],
-            [InlineKeyboardButton("Estado", callback_data="ui:active_status"), InlineKeyboardButton("Ayuda", callback_data="ui:help")],
+            [
+                InlineKeyboardButton("Flows", callback_data="ui:list_flows"),
+                InlineKeyboardButton("Providers", callback_data="ui:providers"),
+            ],
+            [
+                InlineKeyboardButton("Estado", callback_data="ui:active_status"),
+                InlineKeyboardButton("Resumen", callback_data="ui:summary"),
+            ],
+            [
+                InlineKeyboardButton("Hallazgos", callback_data="ui:findings"),
+                InlineKeyboardButton("Logs", callback_data="ui:logs"),
+            ],
+            [
+                InlineKeyboardButton("Terminal", callback_data="ui:terminal"),
+                InlineKeyboardButton("Detener local", callback_data="ui:stop_local"),
+            ],
+            [InlineKeyboardButton("Ayuda", callback_data="ui:help")],
         ]
     )
 
@@ -89,7 +105,7 @@ def format_flow_list(flows: list[dict[str, Any]]) -> str:
         flow_id = str(flow.get("id", "?"))
         lines.append(
             f"• `{flow_id}` — *{flow.get('title') or flow.get('name', '?')}*\n"
-            f"   Estado: {flow.get('status', '?')} | Provider: {flow.get('provider', '?')}\n"
+            f"   Estado: {flow.get('status', '?')} | Provider: {provider_label(flow.get('provider'))}\n"
             f"   Actualizado: {flow.get('updatedAt', '?')}"
         )
     return truncate("\n".join(lines))
@@ -167,7 +183,7 @@ def format_approval(approval: Approval) -> str:
         "⚠️ Aprobación requerida\n"
         f"Acción: `{approval.action}`\nRiesgo: {approval.risk}\n"
         f"Código: `{approval.code}`\n"
-        "Usa los botones para confirmar o denegar. Los comandos son fallback."
+        "Usa los botones para confirmar o denegar. Fallback: /confirm <code>, /confirm_delete <code> o /deny <code>."
     )
 
 

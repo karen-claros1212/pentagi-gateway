@@ -139,12 +139,23 @@ class PentagiClient:
         data = await self._query(AGENT_LOGS_QUERY, variables)
         return data.get("agentLogs", [])
 
-    async def create_flow(self, input_data: dict[str, Any]) -> dict[str, Any]:
-        data = await self.graphql_request(CREATE_FLOW_MUTATION, {"input": input_data})
+    async def create_flow(
+        self,
+        input_data: dict[str, Any] | str,
+        model_provider: str = "qwen",
+    ) -> dict[str, Any]:
+        user_input = input_data if isinstance(input_data, str) else str(input_data.get("prompt") or input_data)
+        data = await self.graphql_request(
+            CREATE_FLOW_MUTATION,
+            {"modelProvider": model_provider, "input": user_input},
+        )
         return data.get("createFlow", {})
 
     async def put_user_input(self, flow_id: str, user_input: str) -> dict[str, Any]:
-        data = await self.graphql_request(PUT_USER_INPUT_MUTATION, {"flowId": flow_id, "input": user_input})
+        data = await self.graphql_request(
+            PUT_USER_INPUT_MUTATION,
+            {"flowId": flow_id, "input": user_input},
+        )
         return data.get("putUserInput", {})
 
     async def stop_flow(self, flow_id: str) -> dict[str, Any]:
@@ -155,10 +166,10 @@ class PentagiClient:
         data = await self.graphql_request(FINISH_FLOW_MUTATION, {"flowId": flow_id})
         return data.get("finishFlow", {})
 
-    async def rename_flow(self, flow_id: str, name: str) -> dict[str, Any]:
-        data = await self.graphql_request(RENAME_FLOW_MUTATION, {"flowId": flow_id, "name": name})
+    async def rename_flow(self, flow_id: str, title: str) -> dict[str, Any]:
+        data = await self.graphql_request(RENAME_FLOW_MUTATION, {"flowId": flow_id, "title": title})
         return data.get("renameFlow", {})
 
     async def delete_flow(self, flow_id: str) -> dict[str, Any]:
         data = await self.graphql_request(DELETE_FLOW_MUTATION, {"flowId": flow_id})
-        return {"deleteFlow": data.get("deleteFlow")}
+        return data.get("deleteFlow", {})

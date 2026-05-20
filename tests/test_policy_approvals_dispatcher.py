@@ -117,7 +117,7 @@ async def test_confirm_cannot_execute_delete_confirm_delete_required(tmp_path):
     code = rows[0]["code"]
     normal = FakeUpdate(text=f"/confirm {code}")
     await dispatcher.confirm(normal, code)
-    assert "confirm-delete" in normal.message.replies[-1]
+    assert "confirm_delete" in normal.message.replies[-1]
     assert client.mutations == []
     special = FakeUpdate(text=f"/confirm_delete {code}")
     await dispatcher.confirm(special, code, delete=True)

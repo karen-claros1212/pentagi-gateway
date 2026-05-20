@@ -178,7 +178,7 @@ class Dispatcher:
             await _reply(update, policy.message or READ_ONLY_BLOCK_MESSAGE, reply_markup=error_markup())
             return
         if result.approval.action == "delete_flow" and not delete:
-            await _reply(update, "deleteFlow requiere /confirm-delete <code>.", reply_markup=error_markup())
+            await _reply(update, "deleteFlow requiere /confirm_delete <code>.", reply_markup=error_markup())
             return
         try:
             mutation_result = await self._execute_mutation(result.approval.action, result.approval.payload)

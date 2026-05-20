@@ -117,9 +117,9 @@ class ApprovalStore:
             await self.store.audit(user_id, chat_id, "approval_expired", risk=approval.risk, allowed=False, reason=approval.action)
             return ApprovalResult(False, "Aprobación expirada.")
         if approval.confirm_delete and not require_delete:
-            return ApprovalResult(False, "deleteFlow requiere /confirm-delete <code>.")
+            return ApprovalResult(False, "deleteFlow requiere /confirm_delete <code>.")
         if require_delete and (not approval.confirm_delete or not allow_delete):
-            return ApprovalResult(False, "confirm-delete no permitido para esta aprobación.")
+            return ApprovalResult(False, "confirm_delete no permitido para esta aprobación.")
         if payload is not None and _payload_hash(payload) != approval.payload_hash:
             return ApprovalResult(False, "Payload cambió; aprobación inválida.")
         await self._set_status(approval, "confirmed", used=True)
