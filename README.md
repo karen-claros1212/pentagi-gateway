@@ -17,6 +17,26 @@ Real Telegram is **NO-GO** until `TELEGRAM_BOT_TOKEN` is configured locally. Rea
 
 `deleteFlow` is extra protected: it requires admin role, `DELETE_FLOW_ENABLED=true`, and `/confirm_delete <code>`. Normal `/confirm` cannot execute delete.
 
+## Conversational operator model
+
+PentAGI Gateway is a Telegram operator UI, not a command router. The intended path is:
+
+`Telegram message → natural conversation → active flow context → policy → UI-equivalent action → response with buttons`
+
+The Gateway mirrors the real PentAGI UI concepts: active flow context, providers, assistants/tasks, logs, live/event state and state-based actions. Buttons never bypass governance; callbacks are routed back through the same dispatcher and policy engine as text and commands.
+
+Conversational examples:
+
+- `hola` / `buenas` → natural operator introduction with buttons.
+- `quién eres` → explains the PentAGI Gateway operator identity.
+- `qué puedes hacer` → describes capabilities in human language before technical commands.
+- Flow activity question with no active flow → offers flow selection instead of a technical error.
+- Active flow running → shows a state summary and action buttons.
+- Active flow waiting → asks for user input; in `READ_ONLY`, explains that sending input is blocked unless `ASSISTED_EXECUTION` plus approval is enabled.
+- Active flow finished/stopped → offers report-oriented actions such as summary and findings.
+- Sensitive actions → blocked in `READ_ONLY`; approval-gated in `ASSISTED_EXECUTION`.
+- GraphQL/auth errors → safe human message with redaction, no traceback or token echo.
+
 ## Natural Language First
 
 Natural language is the primary interface; commands are fallback. Offline deterministic examples:
@@ -29,6 +49,9 @@ Natural language is the primary interface; commands are fallback. Offline determ
 - `crea un flow...` → approval request, no direct execution
 - `dile que continúe` → input approval for active flow
 - `detén todo` → stop approval for active flow, or clarification
+- `hola` / `buenas` → operator intro with inline menu
+- `quién eres` → identity of the Gateway operator
+- `qué puedes hacer` → capabilities in plain language
 - ambiguous text → clarification
 - delete/destructive text → blocked by default
 

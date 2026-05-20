@@ -39,15 +39,20 @@ class CommandHandlers:
         mapping = {
             "list_flows": "list_flows",
             "providers": "list_providers",
+            "gateway_status": "gateway_status",
             "active_status": "get_flow_status",
             "summary": "get_flow_summary",
+            "tasks": "get_tasks",
             "findings": "get_recent_findings",
             "logs": "get_logs",
             "terminal": "get_terminal",
             "stop_local": "stop_local",
+            "send_input_help": "send_input_help",
             "help": "help",
         }
-        await self._dispatch.handle_command_action(update, ctx, mapping.get(action, "help"), {"message": help_text()})
+        routed = mapping.get(action, "help")
+        payload = {"message": help_text()} if routed == "help" else {}
+        await self._dispatch.handle_command_action(update, ctx, routed, payload)
 
     async def _handle_flow_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, data: str) -> None:
         parts = data.split(":", 2)
@@ -62,6 +67,9 @@ class CommandHandlers:
             "tasks": "get_tasks",
             "logs": "get_logs",
             "terminal": "get_terminal",
+            "findings": "get_recent_findings",
+            "send_help": "send_input_help",
+            "stop_local": "stop_local",
             "watch": "watch_flow",
             "unwatch": "unwatch_flow",
         }

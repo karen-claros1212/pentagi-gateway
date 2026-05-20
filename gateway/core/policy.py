@@ -42,6 +42,12 @@ READ_ACTIONS = {
     "get_flow_summary",
     "get_recent_findings",
     "help",
+    "operator_intro",
+    "operator_identity",
+    "operator_capabilities",
+    "gateway_status",
+    "context_help",
+    "send_input_help",
     "stop_local",
     "unknown",
 }
@@ -53,7 +59,7 @@ MUTATION_ACTIONS = {
     "rename_flow",
     "delete_flow",
 }
-REPORT_ACTIONS = {"get_flow_summary", "get_recent_findings", "get_logs", "get_terminal", "help"}
+REPORT_ACTIONS = {"get_flow_summary", "get_recent_findings", "get_logs", "get_terminal", "help", "context_help", "gateway_status"}
 
 
 @dataclass

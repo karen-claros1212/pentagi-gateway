@@ -11,7 +11,10 @@ from ..security import redact
 
 MAX_TELEGRAM = 3500
 MAX_TERMINAL = 3500
-NO_ACTIVE_FLOW_TEXT = "No tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles."
+NO_ACTIVE_FLOW_TEXT = (
+    "Ahora mismo no tengo un flow activo seleccionado. "
+    "Elige un flow para operar con resumen, tareas, logs, terminal y hallazgos."
+)
 SAFE_ERROR_TEXT = "Ocurrió un error seguro. No se ejecutó ninguna acción en PentAGI."
 
 
@@ -32,34 +35,38 @@ def main_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Flows", callback_data="ui:list_flows"),
-                InlineKeyboardButton("Providers", callback_data="ui:providers"),
+                InlineKeyboardButton("Ver flows", callback_data="ui:list_flows"),
+                InlineKeyboardButton("Estado gateway", callback_data="ui:gateway_status"),
             ],
             [
-                InlineKeyboardButton("Estado", callback_data="ui:active_status"),
+                InlineKeyboardButton("Providers", callback_data="ui:providers"),
+                InlineKeyboardButton("Ayuda", callback_data="ui:help"),
+            ],
+            [
+                InlineKeyboardButton("Estado flow", callback_data="ui:active_status"),
                 InlineKeyboardButton("Resumen", callback_data="ui:summary"),
+            ],
+            [InlineKeyboardButton("Tareas", callback_data="ui:tasks"), InlineKeyboardButton("Enviar instrucción", callback_data="ui:send_input_help")],
+            [
+                InlineKeyboardButton("Logs", callback_data="ui:logs"),
+                InlineKeyboardButton("Terminal", callback_data="ui:terminal"),
             ],
             [
                 InlineKeyboardButton("Hallazgos", callback_data="ui:findings"),
-                InlineKeyboardButton("Logs", callback_data="ui:logs"),
+                InlineKeyboardButton("Stop local", callback_data="ui:stop_local"),
             ],
-            [
-                InlineKeyboardButton("Terminal", callback_data="ui:terminal"),
-                InlineKeyboardButton("Detener local", callback_data="ui:stop_local"),
-            ],
-            [InlineKeyboardButton("Ayuda", callback_data="ui:help")],
         ]
     )
 
 
 def no_active_flow_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Mostrar flows", callback_data="ui:list_flows"), InlineKeyboardButton("Ayuda", callback_data="ui:help")]]
+        [[InlineKeyboardButton("Ver flows", callback_data="ui:list_flows"), InlineKeyboardButton("Ayuda", callback_data="ui:help")]]
     )
 
 
 def error_markup() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("Menú", callback_data="ui:help"), InlineKeyboardButton("Flows", callback_data="ui:list_flows")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("Ayuda", callback_data="ui:help"), InlineKeyboardButton("Flows", callback_data="ui:list_flows")]])
 
 
 def stop_markup() -> InlineKeyboardMarkup:
@@ -71,7 +78,9 @@ def flow_actions_markup(flow_id: str) -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("Estado", callback_data=f"flow:status:{flow_id}"), InlineKeyboardButton("Resumen", callback_data=f"flow:summary:{flow_id}")],
             [InlineKeyboardButton("Tareas", callback_data=f"flow:tasks:{flow_id}"), InlineKeyboardButton("Logs", callback_data=f"flow:logs:{flow_id}")],
-            [InlineKeyboardButton("Terminal", callback_data=f"flow:terminal:{flow_id}"), InlineKeyboardButton("Watch", callback_data=f"flow:watch:{flow_id}")],
+            [InlineKeyboardButton("Terminal", callback_data=f"flow:terminal:{flow_id}"), InlineKeyboardButton("Hallazgos", callback_data=f"flow:findings:{flow_id}")],
+            [InlineKeyboardButton("Enviar instrucción", callback_data=f"flow:send_help:{flow_id}"), InlineKeyboardButton("Stop local", callback_data="ui:stop_local")],
+            [InlineKeyboardButton("Watch", callback_data=f"flow:watch:{flow_id}"), InlineKeyboardButton("Ayuda", callback_data="ui:help")],
         ]
     )
 
@@ -83,7 +92,7 @@ def flows_markup(flows: list[dict[str, Any]]) -> InlineKeyboardMarkup:
         if flow_id.isdigit():
             label = str(flow.get("title") or flow.get("name") or flow_id)[:32]
             rows.append([InlineKeyboardButton(f"Abrir {label}", callback_data=f"flow:bind:{flow_id}")])
-    rows.append([InlineKeyboardButton("Menú", callback_data="ui:help")])
+    rows.append([InlineKeyboardButton("Ayuda", callback_data="ui:help")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -96,6 +105,33 @@ def approval_markup(approval: Approval) -> InlineKeyboardMarkup:
         ]
     )
 
+
+
+def format_operator_intro() -> str:
+    return (
+        "Hola. Soy tu operador de PentAGI Gateway en Telegram. Trabajo con el contexto del flow activo: "
+        "puedo ayudarte a elegir flows, revisar providers, resumen, tareas, logs, terminal y hallazgos. "
+        "El gateway está en modo seguro: las instrucciones y acciones reales pasan por política y aprobación."
+    )
+
+
+def format_identity() -> str:
+    return (
+        "Soy PentAGI Gateway, una interfaz conversacional para operar PentAGI desde Telegram. "
+        "Mi modelo mental es el de la UI: flow activo, providers, asistentes, eventos, logs y hallazgos. "
+        "No ejecuto mutaciones directas en READ_ONLY."
+    )
+
+
+def format_no_active_flow_guidance() -> str:
+    return NO_ACTIVE_FLOW_TEXT + " Usa los botones para ver flows o pedir ayuda."
+
+
+def format_contextual_help() -> str:
+    return (
+        "Te ayudo como operador de PentAGI. Puedes preguntar: 'qué está haciendo', 'resume', "
+        "'qué encontró', 'muéstrame logs' o 'abre flow 123'. Los comandos quedan como fallback técnico."
+    )
 
 def format_flow_list(flows: list[dict[str, Any]]) -> str:
     if not flows:
@@ -195,3 +231,92 @@ def format_events(events: list[Any]) -> str:
     if not events:
         return "Sin eventos pendientes."
     return truncate("\n".join(f"• {getattr(e, 'name', '?')} flow={getattr(e, 'flow_id', '?')}" for e in events))
+
+
+OPERATOR_INTRO_TEXT = (
+    "Hola. Soy el operador de PentAGI Gateway en Telegram. Trabajo con el contexto activo como la UI de PentAGI: "
+    "flows, providers, asistentes, logs, eventos y acciones según estado."
+)
+IDENTITY_TEXT = (
+    "Soy PentAGI Gateway Operator: traduzco conversación natural de Telegram a acciones equivalentes de la UI de PentAGI, "
+    "manteniendo contexto activo y aplicando política antes de cualquier acción sensible."
+)
+CAPABILITIES_TEXT = (
+    "Puedo ayudarte a elegir un flow, revisar estado, tareas, resumen, logs, terminal y hallazgos; ver providers; "
+    "y preparar instrucciones o acciones sensibles solo cuando el modo del Gateway y una aprobación explícita lo permitan."
+)
+
+
+def operator_intro() -> str:
+    return OPERATOR_INTRO_TEXT + "\n\nElige una acción o dime qué necesitas en lenguaje natural."
+
+
+def operator_identity() -> str:
+    return IDENTITY_TEXT
+
+
+def operator_capabilities() -> str:
+    return CAPABILITIES_TEXT
+
+
+def no_active_flow_guidance() -> str:
+    return (
+        "Ahora no tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles "
+        "para que elijas uno y desde ahí revisar estado, tareas, logs, hallazgos o resumen."
+    )
+
+def gateway_status_text(mode: str) -> str:
+    if mode.upper() == "READ_ONLY":
+        safety = "Modo READ_ONLY: puedo consultar y preparar contexto; las acciones sensibles están bloqueadas."
+    elif mode.upper() == "ASSISTED_EXECUTION":
+        safety = "Modo ASSISTED_EXECUTION: las acciones sensibles requieren aprobación explícita antes de llamar a PentAGI."
+    else:
+        safety = f"Modo {mode}: aplicaré la política configurada antes de actuar."
+    return f"PentAGI Gateway está operativo. {safety}"
+
+
+def send_input_help(mode: str) -> str:
+    if mode.upper() == "READ_ONLY":
+        return (
+            "Puedo ayudarte a redactar una instrucción para el flow activo, pero enviarla a PentAGI está bloqueado en READ_ONLY. "
+            "Para putUserInput se necesita ASSISTED_EXECUTION y aprobación."
+        )
+    return "Escribe algo como: 'dile que continúe con el análisis'. Antes de enviarlo, pediré aprobación."
+
+
+def format_flow_state_summary(flow: dict[str, Any] | None, tasks: list[dict[str, Any]], logs: list[dict[str, Any]], mode: str = "READ_ONLY") -> str:
+    if not flow:
+        return "No encontré ese flow. Puedes volver a la lista y elegir otro."
+    status_raw = str(flow.get("status") or flow.get("state") or "unknown")
+    status = status_raw.lower()
+    title = flow.get("title") or flow.get("name") or flow.get("id") or "flow"
+    base = [f"Resumen del flow activo: {title}", f"Estado: {status_raw}", f"Tareas visibles: {len(tasks)}"]
+    if any(x in status for x in ("run", "running", "active", "working", "created")):
+        base.append("Está en marcha. Puedo resumir progreso, tareas, logs, terminal o hallazgos.")
+    elif any(x in status for x in ("wait", "waiting", "input", "need", "paused")):
+        if mode.upper() == "READ_ONLY":
+            base.append("Parece estar esperando input. En READ_ONLY puedo ayudarte a redactarlo, pero enviarlo está bloqueado salvo ASSISTED_EXECUTION + aprobación.")
+        else:
+            base.append("Parece estar esperando input. Si quieres enviar una instrucción, pediré aprobación antes.")
+    elif any(x in status for x in ("finish", "finished", "done", "stopped", "failed", "error")):
+        base.append("Parece finalizado o detenido. Puedo preparar un reporte con resumen y hallazgos.")
+    else:
+        base.append("Puedo revisar detalle, tareas, logs o hallazgos para aclarar el estado.")
+    recent = " | ".join(redact(str(x.get("message") or x.get("content") or x.get("text") or x.get("result") or ""))[:90] for x in logs[-3:])
+    if recent:
+        base.append(f"Reciente: {recent}")
+    return truncate("\n".join(base))
+
+
+def format_safe_error(exc: BaseException | str) -> str:
+    text = redact(str(exc))
+    lowered = text.lower()
+    if "graphql" in lowered or "validation" in lowered or "parse" in lowered:
+        detail = "PentAGI rechazó la consulta o el esquema no coincide con lo esperado. No se ejecutó ninguna acción."
+    elif "401" in text or "token" in lowered or "unauthorized" in lowered or "auth" in lowered:
+        detail = "No puedo autenticar contra PentAGI con la configuración actual. Revisa credenciales fuera del chat."
+    elif "timeout" in lowered:
+        detail = "PentAGI tardó demasiado en responder. No se ejecutó ninguna acción."
+    else:
+        detail = "No pude completar la consulta de forma segura. No se ejecutó ninguna acción."
+    return f"⚠️ {detail}"

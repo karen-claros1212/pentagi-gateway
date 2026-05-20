@@ -14,8 +14,26 @@ from pydantic import ValidationError
 from .schemas import MUTATION_INTENTS, Intent, IntentDecision
 
 
-NO_ACTIVE_FLOW_TEXT = "No tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles."
-UNKNOWN_GUIDANCE = "No entendí. Puedes pedirme: mostrar flows, abrir flow <id>, resumir el flow activo o revisar hallazgos."
+NO_ACTIVE_FLOW_TEXT = (
+    "Ahora no tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles "
+    "para que elijas uno y desde ahí revisar estado, tareas, logs, hallazgos o resumen."
+)
+UNKNOWN_GUIDANCE = (
+    "No entendí del todo el contexto. Puedes hablarme natural: mostrar flows, abrir flow 123, "
+    "resumir el flow activo, revisar hallazgos o ver providers."
+)
+GREETING_TEXT = (
+    "Hola. Soy el operador Telegram de PentAGI Gateway. Te ayudo a trabajar con PentAGI como en la UI: "
+    "flows, providers, tareas, logs, hallazgos y acciones seguras según el modo del Gateway."
+)
+IDENTITY_TEXT = (
+    "Soy PentAGI Gateway: una capa operadora entre Telegram y PentAGI. Mantengo el contexto del flow activo, "
+    "aplico política de seguridad y convierto tus mensajes en acciones equivalentes a la UI cuando están permitidas."
+)
+CAPABILITIES_TEXT = (
+    "Puedo mostrar y vincular flows, resumir actividad, revisar tareas, logs, terminal y hallazgos, listar providers "
+    "y preparar acciones como crear, detener o enviar instrucciones solo si el modo y la aprobación lo permiten."
+)
 
 
 class Brain:
@@ -73,16 +91,23 @@ class Brain:
         low = t.lower()
         flow_id = _extract_flow_id(t) or active_flow_id
         if not t:
-            return IntentDecision(intent=Intent.UNKNOWN, user_response="¿Qué necesitas hacer?")
+            return IntentDecision(intent=Intent.GREETING, user_response=GREETING_TEXT)
+        normalized = _strip_accents(low)
+        if _is_greeting(normalized):
+            return IntentDecision(intent=Intent.GREETING, user_response=GREETING_TEXT)
+        if any(x in normalized for x in ("quien eres", "que eres", "quien sos", "quien es pentagi gateway")):
+            return IntentDecision(intent=Intent.WHO_ARE_YOU, user_response=IDENTITY_TEXT)
+        if any(x in normalized for x in ("que puedes hacer", "que haces", "capacidades", "capabilities")):
+            return IntentDecision(intent=Intent.CAPABILITIES, user_response=CAPABILITIES_TEXT)
         if any(w in low for w in ("ayuda", "help", "/help")):
-            return IntentDecision(intent=Intent.HELP)
+            return IntentDecision(intent=Intent.CONTEXT_HELP, user_response=CAPABILITIES_TEXT)
         if "proveedor" in low or "providers" in low:
             return IntentDecision(intent=Intent.LIST_PROVIDERS)
         if "muéstrame los flows" in low or "lista flows" in low or "flujos" in low or "flows" in low:
             return IntentDecision(intent=Intent.LIST_FLOWS)
         if any(x in low for x in ("abre este flow", "abre flow", "abrir flow", "bind", "vincula")) and flow_id:
             return IntentDecision(intent=Intent.BIND_FLOW, flow_ref=flow_id)
-        if any(x in low for x in ("qué está haciendo", "que esta haciendo", "estado", "status")):
+        if any(x in low for x in ("qué está haciendo", "que esta haciendo", "quién está trabajando", "quien esta trabajando", "actividad", "trabajando", "estado", "status")):
             if flow_id:
                 return IntentDecision(intent=Intent.GET_FLOW_STATUS, flow_ref=flow_id)
             return IntentDecision(intent=Intent.UNKNOWN, user_response=NO_ACTIVE_FLOW_TEXT)
@@ -138,3 +163,22 @@ def _enforce_safety(decision: IntentDecision) -> IntentDecision:
         elif decision.risk.upper() not in {"HIGH", "CRITICAL"}:
             decision.risk = "HIGH"
     return decision.normalized()
+
+
+def _strip_accents(text: str) -> str:
+    return (
+        text.replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+        .replace("ü", "u")
+        .replace("ñ", "n")
+    )
+
+
+def _is_greeting(text: str) -> bool:
+    clean = re.sub(r"[^a-z0-9 ]+", " ", text).strip()
+    if clean in {"hola", "buenas", "buenos dias", "buen dia", "buenas tardes", "buenas noches", "hey", "hello", "hi"}:
+        return True
+    return clean.startswith(("hola ", "buenas ")) and len(clean.split()) <= 5
