@@ -4,7 +4,6 @@ import pytest
 from gateway.core.auth import AuthProvider
 from gateway.core.dispatcher import Dispatcher
 from gateway.core.session import SessionStore
-from gateway.security.rate_limiter import RateLimiter
 
 
 @pytest.mark.asyncio

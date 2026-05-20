@@ -1,10 +1,11 @@
-"""PentAGI Gateway — entry point."""
+"""PentAGI Gateway entry point."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from .config import Settings
 from .core.auth import AuthProvider
@@ -34,37 +35,15 @@ async def amain() -> None:
         sys.exit(1)
 
     setup_logging(settings.gateway_log_level)
-    logger.info("mode=%s endpoint=%s", settings.gateway_mode, settings.graphql_url)
+    logger.info("settings=%s", settings)
+    Path(settings.gateway_sqlite_path).parent.mkdir(parents=True, exist_ok=True)
 
-    # DB
     store = SessionStore(settings.gateway_sqlite_path)
     await store.open()
-
-    # PentAGI client
-    client = PentagiClient(
-        graphql_url=settings.graphql_url,
-        api_token=settings.pentagi_api_token,
-        verify_tls=settings.pentagi_verify_tls,
-    )
-
-    # Auth
-    auth = AuthProvider(
-        allowed_users=settings.allowed_user_ids,
-        allowed_chats=settings.allowed_chat_ids,
-    )
-
-    # Dispatcher
-    dispatcher = Dispatcher(auth, store, RateLimiter())
-
-    # Bot
-    bot = TelegramBot(
-        token=settings.telegram_bot_token,
-        client=client,
-        auth=auth,
-        store=store,
-        dispatcher=dispatcher,
-        allowed_users=settings.allowed_user_ids,
-    )
+    client = PentagiClient(settings.graphql_url, settings.pentagi_api_token, settings.pentagi_verify_tls)
+    auth = AuthProvider(settings.allowed_user_ids, settings.allowed_chat_ids)
+    dispatcher = Dispatcher(auth, store, RateLimiter(), settings=settings, client=client)
+    bot = TelegramBot(settings.telegram_bot_token, client, auth, store, dispatcher, settings.allowed_user_ids)
 
     try:
         await bot.start_polling()

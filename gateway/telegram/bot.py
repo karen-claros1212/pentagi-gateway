@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from ..core.auth import AuthProvider
 from ..core.dispatcher import Dispatcher
@@ -28,7 +28,7 @@ class TelegramBot:
         dispatcher: Dispatcher,
         allowed_users: list[int],
     ) -> None:
-        self._token = token
+        del auth, store
         self._allowed = set(allowed_users)
         self._handlers = CommandHandlers(client, dispatcher)
         self._app = Application.builder().token(token).build()
@@ -47,17 +47,33 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("bind", h.bind))
         self._app.add_handler(CommandHandler("unbind", h.unbind))
         self._app.add_handler(CommandHandler("active", h.active))
-
-        # Unauth fallback
+        self._app.add_handler(CommandHandler("create_flow", h.create_flow))
+        self._app.add_handler(CommandHandler("send", h.send))
+        self._app.add_handler(CommandHandler("stop_flow", h.stop_flow))
+        self._app.add_handler(CommandHandler("finish_flow", h.finish_flow))
+        self._app.add_handler(CommandHandler("rename_flow", h.rename_flow))
+        self._app.add_handler(CommandHandler("delete_flow", h.delete_flow))
+        self._app.add_handler(CommandHandler("confirm", h.confirm))
+        self._app.add_handler(CommandHandler("confirm-delete", h.confirm_delete))
+        self._app.add_handler(CommandHandler("deny", h.deny))
+        self._app.add_handler(CommandHandler("watch", h.watch))
+        self._app.add_handler(CommandHandler("unwatch", h.unwatch))
+        self._app.add_handler(CommandHandler("watch_status", h.watch_status))
+        self._app.add_handler(CommandHandler("summary", h.summary))
+        self._app.add_handler(CommandHandler("report", h.report))
+        self._app.add_handler(CallbackQueryHandler(h.callback))
+        self._app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, h.text))
         self._app.add_handler(MessageHandler(filters.ALL, self._unauth), group=-1)
         self._app.add_error_handler(self._on_error)
 
     async def _unauth(self, update, context) -> None:
+        del context
         uid = update.effective_user.id if update.effective_user else 0
         if uid not in self._allowed:
             await update.message.reply_text("⛔ Unauthorized.")
 
     async def _on_error(self, update, context) -> None:
+        del update
         logger.error("Telegram error: %s", redact(str(context.error)))
 
     async def start_polling(self) -> None:

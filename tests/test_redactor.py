@@ -1,6 +1,7 @@
 """Test security redactor."""
 
 from gateway.security import redact, redact_dict
+from gateway.telegram.formatter import format_terminal_logs
 
 
 def test_redact_bearer():
@@ -23,14 +24,24 @@ def test_redact_telegram_token():
     assert redact("8347753726:AAHkN-XrNnkybIwZcnWSaBXdgX2LHSUe-1A") == "***"
 
 
+def test_redact_env_assignment():
+    assert redact("TELEGRAM_BOT_TOKEN=secret") == "***"
+
+
 def test_redact_dict_sensitive_keys():
-    d = {"api_key": "secret123", "name": "bob"}
-    r = redact_dict(d)
-    assert r["api_key"] == "***"
-    assert r["name"] == "bob"
+    data = {"api_key": "secret123", "name": "bob"}
+    redacted = redact_dict(data)
+    assert redacted["api_key"] == "***"
+    assert redacted["name"] == "bob"
 
 
 def test_redact_dict_bearer_value():
-    d = {"auth": "Bearer tok123", "x": "y"}
-    r = redact_dict(d)
-    assert r["auth"] == "***"
+    data = {"auth": "Bearer tok123", "x": "y"}
+    redacted = redact_dict(data)
+    assert redacted["auth"] == "***"
+
+
+def test_terminal_formatter_redacts_secrets():
+    text = format_terminal_logs([{"content": "PENTAGI_API_TOKEN=abc", "createdAt": "now"}])
+    assert "abc" not in text
+    assert "***" in text
