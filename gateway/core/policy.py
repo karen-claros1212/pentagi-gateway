@@ -87,7 +87,7 @@ class PolicyEngine:
         auth: AuthContext,
         payload: dict[str, Any] | None = None,
     ) -> ActionDecision:
-        del payload
+        payload = payload or {}
         risk_value = risk if isinstance(risk, Risk) else Risk(str(risk).upper())
         if self.mode == GatewayMode.LOCKED:
             return ActionDecision(False, blocked=True, message="Bloqueado: Gateway está en LOCKED.", risk=risk_value, action=action)
@@ -107,6 +107,10 @@ class PolicyEngine:
         if self.mode != GatewayMode.ASSISTED_EXECUTION:
             return ActionDecision(False, blocked=True, message="Bloqueado por modo de Gateway.", risk=risk_value, action=action)
 
+        invalid_message = _invalid_mutation_payload_message(action, payload)
+        if invalid_message:
+            return ActionDecision(False, blocked=True, message=invalid_message, risk=risk_value, action=action)
+
         if action == "delete_flow":
             if auth.role != Role.ADMIN:
                 return ActionDecision(False, blocked=True, message="Bloqueado: deleteFlow requiere rol admin.", risk=Risk.CRITICAL, action=action)
@@ -115,3 +119,20 @@ class PolicyEngine:
             return ActionDecision(False, requires_approval=True, risk=Risk.CRITICAL, action=action, confirm_delete_required=True)
 
         return ActionDecision(False, requires_approval=True, risk=risk_value, action=action)
+
+
+def _invalid_mutation_payload_message(action: str, payload: dict[str, Any]) -> str:
+    if action == "create_flow":
+        input_value = payload.get("input")
+        prompt = input_value.get("prompt") if isinstance(input_value, dict) else input_value
+        return "" if str(prompt or "").strip() else "Bloqueado: createFlow requiere un prompt no vacío."
+
+    flow_id = payload.get("flow_id")
+    if not isinstance(flow_id, str) or not flow_id.isdigit():
+        return f"Bloqueado: {action} requiere un flow_id numérico explícito."
+
+    if action == "put_user_input" and not str(payload.get("input") or "").strip():
+        return "Bloqueado: putUserInput requiere texto no vacío."
+    if action == "rename_flow" and not str(payload.get("name") or "").strip():
+        return "Bloqueado: renameFlow requiere un nombre no vacío."
+    return ""

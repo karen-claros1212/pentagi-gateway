@@ -15,6 +15,8 @@ Real Telegram is **NO-GO** until `TELEGRAM_BOT_TOKEN` is configured locally. Rea
 - `ASSISTED_EXECUTION`: mutation requests create one-use approvals. Confirmation is required before execution.
 - `LOCKED`: all governed actions are blocked.
 
+Before an approval is created, mutation payloads are validated: flow-scoped mutations require an explicit numeric `flow_id`, `createFlow` requires a non-empty prompt, `putUserInput` requires non-empty text, and `renameFlow` requires a non-empty name. Confirmation re-runs policy before any mocked/real client mutation call. `PENTAGI_DEFAULT_PROVIDER` is passed to `createFlow`.
+
 `deleteFlow` is extra protected: it requires admin role, `DELETE_FLOW_ENABLED=true`, and `/confirm_delete <code>` or the confirm-delete button. Normal `/confirm` cannot execute delete. READ_ONLY blocks sensitive actions.
 
 ## Natural Language First

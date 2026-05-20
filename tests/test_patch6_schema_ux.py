@@ -12,6 +12,7 @@ from gateway.pentagi.mutations import (
 from gateway.telegram.formatter import (
     approval_markup,
     format_approval,
+    format_flow_detail,
     format_flow_list,
     format_providers,
     main_menu_markup,
@@ -43,8 +44,11 @@ def test_provider_label_and_flow_list_do_not_render_raw_provider_dict():
     provider = {"name": "openai-compatible", "type": "custom"}
     assert provider_label(provider) == "openai-compatible (custom)"
     rendered = format_flow_list([{"id": "123", "name": "demo", "status": "ok", "provider": provider}])
+    detail = format_flow_detail({"id": "123", "name": "demo", "status": "ok", "provider": provider})
     assert "{'name'" not in rendered
+    assert "{'name'" not in detail
     assert "openai-compatible (custom)" in rendered
+    assert "openai-compatible (custom)" in detail
     providers = format_providers([provider])
     assert "model?" not in providers
     assert "status?" not in providers

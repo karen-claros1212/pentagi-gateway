@@ -333,7 +333,10 @@ class Dispatcher:
         if self._client is None:
             return {"error": "Cliente PentAGI no configurado"}
         if action == "create_flow":
-            return await self._client.create_flow(payload.get("input", payload))
+            return await self._client.create_flow(
+                payload.get("input", payload),
+                model_provider=payload.get("model_provider", self._settings.pentagi_default_provider),
+            )
         if action == "put_user_input":
             return await self._client.put_user_input(payload["flow_id"], payload["input"])
         if action == "stop_flow":
@@ -358,7 +361,10 @@ class Dispatcher:
         if not _is_valid_flow_id(flow_id):
             flow_id = None
         if action == "create_flow":
-            return {"input": {"prompt": decision.parameters.get("prompt") or text}}
+            return {
+                "input": {"prompt": decision.parameters.get("prompt") or text},
+                "model_provider": self._settings.pentagi_default_provider,
+            }
         if action == "put_user_input":
             return {"flow_id": flow_id, "input": decision.parameters.get("input") or text}
         if action in {"stop_flow", "finish_flow", "delete_flow"}:

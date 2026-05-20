@@ -118,7 +118,7 @@ def format_flow_detail(flow: dict[str, Any] | None) -> str:
         f"*Flow:* {flow.get('title') or flow.get('name', '?')}\n"
         f"ID: `{flow.get('id', '?')}`\n"
         f"Estado: {flow.get('status', '?')}\n"
-        f"Provider: {flow.get('provider', '?')}\n"
+        f"Provider: {provider_label(flow.get('provider'))}\n"
         f"Creado: {flow.get('createdAt', '?')}\n"
         f"Actualizado: {flow.get('updatedAt', '?')}"
     )

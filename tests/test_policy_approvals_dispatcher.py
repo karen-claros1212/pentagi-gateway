@@ -52,6 +52,45 @@ async def test_assisted_execution_creates_approval_not_execute(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_assisted_execution_blocks_incomplete_mutation_payloads_before_approval(tmp_path):
+    dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
+
+    for action, payload, expected in [
+        ("stop_flow", {"flow_id": None}, "flow_id numérico"),
+        ("finish_flow", {"flow_id": "demo"}, "flow_id numérico"),
+        ("put_user_input", {"flow_id": "1234", "input": ""}, "texto no vacío"),
+        ("rename_flow", {"flow_id": "1234", "name": ""}, "nombre no vacío"),
+    ]:
+        update = FakeUpdate()
+        await dispatcher.handle_command_action(update, FakeContext(), action, payload, risk="HIGH")
+        assert expected in update.message.replies[-1]
+
+    assert await store.approval_rows() == []
+    assert client.mutations == []
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_create_flow_uses_configured_default_provider_after_approval(tmp_path):
+    store = SessionStore(str(tmp_path / "provider.sqlite"))
+    await store.open()
+    client = MockPentagiClient()
+    dispatcher = Dispatcher(
+        AuthProvider(allowed_users=[1]),
+        store,
+        settings=Settings(gateway_mode="ASSISTED_EXECUTION", pentagi_default_provider="custom-provider"),
+        client=client,
+    )
+    update = FakeUpdate(text="crea un flow de prueba")
+    await dispatcher.handle_text(update, FakeContext(), update.message.text)
+    code = (await store.approval_rows())[0]["code"]
+    confirm = FakeUpdate(text=f"/confirm {code}")
+    await dispatcher.confirm(confirm, code)
+    assert client.mutations[0][1]["model_provider"] == "custom-provider"
+    await store.close()
+
+
+@pytest.mark.asyncio
 async def test_valid_confirmation_executes_mocked_mutation_only(tmp_path):
     dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
     update = FakeUpdate(text="crea un flow de prueba")

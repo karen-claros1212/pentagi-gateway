@@ -64,8 +64,8 @@ class MockPentagiClient:
     async def get_terminal_logs(self, flow_id, limit=None):
         return [{"id": "term", "content": "TELEGRAM_BOT_TOKEN=secret-ish", "createdAt": "now"}]
 
-    async def create_flow(self, input_data):
-        self.mutations.append(("create_flow", {"input": input_data}))
+    async def create_flow(self, input_data, model_provider="qwen"):
+        self.mutations.append(("create_flow", {"input": input_data, "model_provider": model_provider}))
         return {"id": "new_flow", "status": "created"}
 
     async def put_user_input(self, flow_id, user_input):
