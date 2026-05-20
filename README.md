@@ -15,26 +15,24 @@ Real Telegram is **NO-GO** until `TELEGRAM_BOT_TOKEN` is configured locally. Rea
 - `ASSISTED_EXECUTION`: mutation requests create one-use approvals. Confirmation is required before execution.
 - `LOCKED`: all governed actions are blocked.
 
-Before an approval is created, mutation payloads are validated: flow-scoped mutations require an explicit numeric `flow_id`, `createFlow` requires a non-empty prompt, `putUserInput` requires non-empty text, and `renameFlow` requires a non-empty name. Confirmation re-runs policy before any mocked/real client mutation call. `PENTAGI_DEFAULT_PROVIDER` is passed to `createFlow`.
-
-`deleteFlow` is extra protected: it requires admin role, `DELETE_FLOW_ENABLED=true`, and `/confirm_delete <code>` or the confirm-delete button. Normal `/confirm` cannot execute delete. READ_ONLY blocks sensitive actions.
+`deleteFlow` is extra protected: it requires admin role, `DELETE_FLOW_ENABLED=true`, and `/confirm_delete <code>`. Normal `/confirm` cannot execute delete.
 
 ## Natural Language First
 
-Natural language and inline buttons are the primary interface; commands are fallback only. Offline deterministic examples:
+Natural language is the primary interface; commands are fallback. Offline deterministic examples:
 
 - `muéstrame los flows` → list flows
-- `abre flow 123` → bind active flow and show detail. Flow IDs must be explicit digits; normal words are never inferred as IDs.
+- `abre este flow <id>` → bind active flow and show detail
 - `qué está haciendo` → active flow status/summary
 - `resume el flow` → active flow summary
 - `qué encontró` → recent findings from tasks/logs
 - `crea un flow...` → approval request, no direct execution
 - `dile que continúe` → input approval for active flow
-- `detén todo` → stop approval for active flow, or clarification. `stop_local` only clears local Gateway state and is not PentAGI `stopFlow`.
+- `detén todo` → stop approval for active flow, or clarification
 - ambiguous text → clarification
 - delete/destructive text → blocked by default
 
-## Buttons primary, commands fallback
+## Commands fallback
 
 Read/report:
 
@@ -50,7 +48,7 @@ Read/report:
 - `/summary <flow_id>`
 - `/report <flow_id>`
 
-Controlled approval commands. Prefer approval buttons; commands are fallback:
+Controlled approval commands:
 
 - `/create_flow <prompt>`
 - `/send <text>`
@@ -144,7 +142,3 @@ async def main():
 asyncio.run(main())
 PY
 ```
-
-## Local stop vs PentAGI stopFlow
-
-The inline `Detener operación local` action only clears the active local session binding. It does not call `stopFlow`, does not send GraphQL, and does not mutate PentAGI. Real `stopFlow` remains a gated mutation requiring `ASSISTED_EXECUTION` plus approval.
