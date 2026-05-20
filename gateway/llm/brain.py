@@ -190,6 +190,10 @@ class Brain:
             return IntentDecision(intent=Intent.UNKNOWN, user_response=NO_ACTIVE_FLOW_TEXT)
         if "delete" in low or "borra" in low or "elimina" in low:
             return _enforce_safety(IntentDecision(intent=Intent.DELETE_FLOW_REQUEST, flow_ref=flow_id, action="delete_flow"))
+        # SMALLTALK: saludos, agradecimientos, charla informal
+        smalltalk_keywords = ["hola","buenas","buen día","buenas tardes","gracias","ok","okey","vale","de acuerdo","perfecto","listo","cómo estás","qué tal","bien y tú","hey","oye","saludos"]
+        if any(k in low for k in smalltalk_keywords):
+            return IntentDecision(intent=Intent.SMALLTALK, user_response="¡Hola! ¿En qué puedo ayudarte con PentAGI hoy?")
         return IntentDecision(intent=Intent.UNKNOWN, user_response=UNKNOWN_GUIDANCE)
 
 

@@ -43,6 +43,7 @@ class Intent(str, Enum):
     SEND_ASSISTANT_MESSAGE = "SEND_ASSISTANT_MESSAGE"
     HELP_UI = "HELP_UI"
     HELP = "HELP"
+    SMALLTALK = "SMALLTALK"
     UNKNOWN = "UNKNOWN"
 
 
