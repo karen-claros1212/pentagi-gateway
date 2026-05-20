@@ -140,6 +140,11 @@ class Dispatcher:
         if session.active_flow_id and self._client:
             await self._take_snapshot(session)
 
+        # Step 1b: If flow is waiting, route non-command text as user input
+        if session.active_flow_status == "waiting" and not text.startswith("/"):
+            await self._route(update, auth_ctx, "put_user_input", "HIGH", {"input": text, "flow_id": session.active_flow_id})
+            return
+
         # Step 2: Build rich context and classify
         ctx = await self._build_brain_context(session)
         decision = await self._brain.classify(text, active_flow_id=session.active_flow_id, context=ctx)
@@ -286,14 +291,6 @@ class Dispatcher:
         # Include user_response for unknown/help intents
         if action in {"help", "help_ui", "unknown"} and decision.user_response:
             payload["message"] = decision.user_response
-
-        # Check if text is input for a waiting flow
-        if session.active_flow_status == "waiting" and not text.startswith("/"):
-            action = "put_user_input"
-            decision.action = "put_user_input"
-            payload = {"input": text, "flow_id": session.active_flow_id}
-            await self._route(update, auth_ctx, action, "HIGH", payload)
-            return
 
         # Check if text is input for draft
         if session.last_screen == "new_flow_draft" and session.draft_message is not None and not text.startswith("/"):

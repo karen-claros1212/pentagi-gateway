@@ -501,6 +501,7 @@ async def test_text_handler_waiting_flow_routing(tmp_path):
     await store.upsert_session(session)
 
     client = MockPentagiClient()
+    client.flows = [{"id": "1234", "name": "Demo", "status": "waiting", "updatedAt": "now"}]
 
     dispatcher = Dispatcher(
         AuthProvider(allowed_users=[1]),

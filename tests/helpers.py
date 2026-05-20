@@ -53,6 +53,9 @@ class MockPentagiClient:
         return self.flows
 
     async def get_flow(self, flow_id):
+        for f in self.flows:
+            if f.get("id") == flow_id:
+                return f
         return {"id": flow_id, "name": "Demo", "status": "running", "updatedAt": "now"}
 
     async def get_tasks(self, flow_id):
