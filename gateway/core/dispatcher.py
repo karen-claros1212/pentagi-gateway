@@ -7,7 +7,7 @@ import time
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from telegram import InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from ..config import Settings
@@ -16,11 +16,8 @@ from ..llm.brain import BrainContext
 from ..pentagi.client import PentagiClient
 from ..security.rate_limiter import RateLimiter
 from ..telegram.formatter import (
-    active_flow_running_screen,
     assistant_screen,
     error_screen,
-    flow_finished_screen,
-    flow_waiting_screen,
     format_approval,
     format_findings,
     format_flow_detail,

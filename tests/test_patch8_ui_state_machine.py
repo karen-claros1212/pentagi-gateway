@@ -11,7 +11,7 @@ Tests cover:
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -21,7 +21,6 @@ from gateway.core.dispatcher import Dispatcher
 from gateway.core.session import SessionStore, TelegramSession
 from gateway.llm import Brain, Intent
 from gateway.llm.brain import BrainContext
-from gateway.llm.schemas import IntentDecision
 from gateway.telegram.formatter import (
     active_flow_running_screen,
     assistant_screen,
@@ -480,7 +479,7 @@ async def test_text_handler_draft_routing(tmp_path):
     await dispatcher.handle_text(update, FakeContext(), "auditar servidor linux")
 
     # Should have updated draft_message in session
-    got = await store.get_session(10, 1)
+    await store.get_session(10, 1)
     # In READ_ONLY, submit_draft blocks with message
     assert "READ_ONLY" in update.message.replies[-1]
 

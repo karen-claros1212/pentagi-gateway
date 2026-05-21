@@ -111,7 +111,6 @@ def active_flow_running_screen(
             if msg:
                 parts.append(f"> {msg}")
     text = truncate("\n".join(parts))
-    flow_id = session.active_flow_id or ""
     kb = [
         [InlineKeyboardButton("🖥 Terminal", callback_data="ui:terminal"),
          InlineKeyboardButton("📋 Tareas", callback_data="ui:tasks")],

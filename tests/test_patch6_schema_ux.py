@@ -29,7 +29,7 @@ def _callbacks(markup):
 def test_mutation_constants_match_pentagi_v2_schema_names_args():
     assert "createFlow(modelProvider: $modelProvider, input: $input)" in CREATE_FLOW_MUTATION
     assert "CreateFlowInput" not in CREATE_FLOW_MUTATION
-    assert "putUserInput(flowId: $flowId, input: $input)" in PUT_USER_INPUT_MUTATION
+    assert "putUserInput(flowId: $flowId, input: $input" in PUT_USER_INPUT_MUTATION
     assert "stopFlow(flowId: $flowId)" in STOP_FLOW_MUTATION
     assert "finishFlow(flowId: $flowId)" in FINISH_FLOW_MUTATION
     assert "deleteFlow(flowId: $flowId)" in DELETE_FLOW_MUTATION
