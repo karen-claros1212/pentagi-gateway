@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from .interfaces import IAuthProvider
+
 
 class Role(str, Enum):
     ADMIN = "admin"
@@ -20,7 +22,7 @@ class AuthContext:
     role: Role = Role.READONLY
 
 
-class AuthProvider:
+class AuthProvider(IAuthProvider):
     """Allowlist-based authorization with role resolution."""
 
     def __init__(

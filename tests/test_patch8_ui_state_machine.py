@@ -249,8 +249,9 @@ def test_home_screen_with_active_flow():
     assert "1234" in text
     callbacks = {b.callback_data for row in markup.inline_keyboard for b in row}
     assert "ui:new_flow" in callbacks
-    assert "ui:status" in callbacks
+    assert "ui:assistant" in callbacks
     assert "ui:stop_flow" in callbacks
+    assert "ui:flows" in callbacks
 
 
 def test_home_screen_no_active_flow():
@@ -258,7 +259,7 @@ def test_home_screen_no_active_flow():
     text, markup = home_screen(session, [], [])
     assert "Sin flow activo" in text
     callbacks = {b.callback_data for row in markup.inline_keyboard for b in row}
-    assert "ui:status" not in callbacks
+    assert "ui:assistant" in callbacks
     assert "ui:new_flow" in callbacks
 
 
@@ -488,7 +489,7 @@ async def test_text_handler_draft_routing(tmp_path):
 
 @pytest.mark.asyncio
 async def test_text_handler_waiting_flow_routing(tmp_path):
-    """Text should be treated as flow input when flow status is waiting."""
+    """Text should be treated as flow input when ui_mode is flow_waiting."""
     store = SessionStore(str(tmp_path / "route2.sqlite"))
     await store.open()
 
@@ -496,6 +497,7 @@ async def test_text_handler_waiting_flow_routing(tmp_path):
         chat_id=10, user_id=1,
         active_flow_id="1234",
         active_flow_status="waiting",
+        ui_mode="flow_waiting",
     )
     await store.upsert_session(session)
 
@@ -512,8 +514,8 @@ async def test_text_handler_waiting_flow_routing(tmp_path):
     update = FakeUpdate(user_id=1, chat_id=10, text="sí, continúa con el escaneo")
     await dispatcher.handle_text(update, FakeContext(), "sí, continúa con el escaneo")
 
-    # Should create an approval for put_user_input
-    assert "Aprobación requerida" in update.message.replies[-1]
+    # put_user_input pasa directo sin aprobación en ASSISTED_EXECUTION
+    assert "Input enviado" in update.message.replies[-1]
 
     await store.close()
 

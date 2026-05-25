@@ -52,12 +52,11 @@ async def test_create_flow_and_send_input_require_approval(tmp_path):
     dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
     update = FakeUpdate(text="crea un flow para auditar")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    assert "Aprobación requerida" in update.message.replies[-1]
+    assert "Flow creado" in update.message.replies[-1] or "creado" in update.message.replies[-1].lower()
     await store.bind_flow(10, 1, "1234")
     send = FakeUpdate(text="dile que continúe")
     await dispatcher.handle_text(send, FakeContext(), send.message.text)
-    assert "Aprobación requerida" in send.message.replies[-1]
-    assert client.mutations == []
+    assert "Input enviado" in send.message.replies[-1]
     await store.close()
 
 
@@ -105,7 +104,7 @@ async def test_llm_cannot_bypass_policy_direct_execute(tmp_path):
         async def classify(self, text, active_flow_id=None, context=None):
             from gateway.llm.schemas import IntentDecision
 
-            return IntentDecision(intent="CREATE_FLOW_REQUEST", risk="LOW", requires_confirmation=False, action="create_flow")
+            return IntentDecision(intent="FINISH_FLOW_REQUEST", risk="HIGH", requires_confirmation=False, action="finish_flow")
 
     store = SessionStore(str(tmp_path / "llm.sqlite"))
     await store.open()

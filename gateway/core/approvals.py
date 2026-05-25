@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from .session import SessionStore
+from .interfaces import ISessionStore
 
 
 @dataclass
@@ -38,7 +38,7 @@ class ApprovalResult:
 class ApprovalStore:
     """One-use approval records bound to user/chat and payload hash."""
 
-    def __init__(self, store: SessionStore, ttl_seconds: int = 300) -> None:
+    def __init__(self, store: ISessionStore, ttl_seconds: int = 300) -> None:
         self.store = store
         self.ttl_seconds = ttl_seconds
 

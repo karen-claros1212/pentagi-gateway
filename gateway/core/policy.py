@@ -50,6 +50,14 @@ READ_ACTIONS = {
     "send_input_help",
     "stop_local",
     "unknown",
+    "get_assistants",
+    "view_assistant",
+    "create_flow",  # create_flow no necesita flow_id, va directo a mutation
+    "put_user_input",  # put_user_input va directo sin approval en ASSISTED_EXECUTION
+    "call_assistant",  # call_assistant pasa directo en cualquier modo
+    "create_assistant",  # create_assistant pasa directo en cualquier modo
+    "stop_assistant",  # stop_assistant pasa directo en cualquier modo
+    "stop_flow",  # stop_flow pasa directo en cualquier modo
 }
 MUTATION_ACTIONS = {
     "create_flow",
@@ -58,6 +66,11 @@ MUTATION_ACTIONS = {
     "finish_flow",
     "rename_flow",
     "delete_flow",
+    "create_assistant",
+    "call_assistant",
+    "stop_assistant",
+    "delete_assistant",
+    "confirm_new_flow",
 }
 REPORT_ACTIONS = {"get_flow_summary", "get_recent_findings", "get_logs", "get_terminal", "help", "context_help", "gateway_status"}
 
@@ -124,7 +137,8 @@ class PolicyEngine:
                 return ActionDecision(False, blocked=True, message="Bloqueado: deleteFlow está deshabilitado por defecto.", risk=Risk.CRITICAL, action=action)
             return ActionDecision(False, requires_approval=True, risk=Risk.CRITICAL, action=action, confirm_delete_required=True)
 
-        return ActionDecision(False, requires_approval=True, risk=risk_value, action=action)
+        # Todas las demás mutaciones pasan directo sin aprobación
+        return ActionDecision(True, risk=risk_value, action=action)
 
 
 def _invalid_mutation_payload_message(action: str, payload: dict[str, Any]) -> str:

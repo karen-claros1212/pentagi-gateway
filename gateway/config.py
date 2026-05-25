@@ -18,8 +18,12 @@ class Settings(BaseSettings):
     pentagi_base_url: str = "https://localhost:8443"
     pentagi_graphql_path: str = "/api/v1/graphql"
     pentagi_api_token: str = ""
-    pentagi_verify_tls: bool = False
     pentagi_default_provider: str = "qwen"
+
+    # TLS / SSL (Pattern 5: defense-in-depth)
+    pentagi_verify_tls: bool = True
+    pentagi_tls_ca_path: str = ""
+    pentagi_tls_pins: str = ""
 
     # Telegram
     telegram_bot_token: str = ""

@@ -5,8 +5,10 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 
+from ..core.interfaces import IRateLimiter
 
-class RateLimiter:
+
+class RateLimiter(IRateLimiter):
     """Simple in-memory rate limiter using sliding window."""
 
     def __init__(self, default_max: int = 10, window_sec: int = 60) -> None:

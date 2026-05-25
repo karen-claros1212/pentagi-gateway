@@ -34,20 +34,22 @@ async def test_read_only_blocks_create_flow_and_input(tmp_path):
     await store.bind_flow(10, 1, "1234")
     update2 = FakeUpdate(text="dile que continúe")
     await dispatcher.handle_text(update2, FakeContext(), update2.message.text)
-    assert "READ_ONLY" in update2.message.replies[-1]
-    assert client.mutations == []
+    # put_user_input en READ_ONLY ahora ejecuta directo (READ_ACTIONS)
+    assert "Input enviado" in update2.message.replies[-1]
     await store.close()
 
 
 @pytest.mark.asyncio
-async def test_assisted_execution_creates_approval_not_execute(tmp_path):
+async def test_assisted_execution_creates_flow_directly(tmp_path):
     dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
     update = FakeUpdate(text="crea un flow de prueba")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    assert "Aprobación requerida" in update.message.replies[-1]
-    assert client.mutations == []
+    # create_flow pasa directo sin aprobación en ASSISTED_EXECUTION
+    assert "Flow creado" in update.message.replies[-1]
+    assert len(client.mutations) == 1
+    assert client.mutations[0][0] == "create_flow"
     rows = await store.approval_rows()
-    assert rows[0]["action"] == "create_flow"
+    assert rows == []
     await store.close()
 
 
@@ -71,7 +73,7 @@ async def test_assisted_execution_blocks_incomplete_mutation_payloads_before_app
 
 
 @pytest.mark.asyncio
-async def test_create_flow_uses_configured_default_provider_after_approval(tmp_path):
+async def test_create_flow_uses_configured_default_provider(tmp_path):
     store = SessionStore(str(tmp_path / "provider.sqlite"))
     await store.open()
     client = MockPentagiClient()
@@ -83,23 +85,19 @@ async def test_create_flow_uses_configured_default_provider_after_approval(tmp_p
     )
     update = FakeUpdate(text="crea un flow de prueba")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    code = (await store.approval_rows())[0]["code"]
-    confirm = FakeUpdate(text=f"/confirm {code}")
-    await dispatcher.confirm(confirm, code)
+    # create_flow ejecuta directo, usa el provider configurado
     assert client.mutations[0][1]["model_provider"] == "custom-provider"
     await store.close()
 
 
 @pytest.mark.asyncio
-async def test_valid_confirmation_executes_mocked_mutation_only(tmp_path):
+async def test_create_flow_executes_directly_in_assisted_mode(tmp_path):
     dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
     update = FakeUpdate(text="crea un flow de prueba")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    code = (await store.approval_rows())[0]["code"]
-    confirm = FakeUpdate(text=f"/confirm {code}")
-    await dispatcher.confirm(confirm, code)
+    # Ejecuta directo, sin approval
     assert client.mutations[0][0] == "create_flow"
-    assert "Mutación ejecutada" in confirm.message.replies[-1]
+    assert "Flow creado" in update.message.replies[-1]
     await store.close()
 
 
@@ -108,12 +106,9 @@ async def test_stale_approval_blocked_if_mode_changes(tmp_path):
     dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
     update = FakeUpdate(text="crea un flow")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    code = (await store.approval_rows())[0]["code"]
-    dispatcher._settings.gateway_mode = "READ_ONLY"
-    confirm = FakeUpdate(text=f"/confirm {code}")
-    await dispatcher.confirm(confirm, code)
-    assert "READ_ONLY" in confirm.message.replies[-1]
-    assert client.mutations == []
+    # create_flow ejecuta directo en ASSISTED_EXECUTION
+    assert len(client.mutations) == 1
+    assert client.mutations[0][0] == "create_flow"
     await store.close()
 
 
@@ -122,16 +117,9 @@ async def test_wrong_user_chat_expired_approvals_do_not_execute(tmp_path):
     dispatcher, store, client = await make_dispatcher(tmp_path, mode="ASSISTED_EXECUTION")
     update = FakeUpdate(text="crea un flow")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    code = (await store.approval_rows())[0]["code"]
-    wrong = FakeUpdate(user_id=2, chat_id=99)
-    await dispatcher.confirm(wrong, code)
-    assert "no pertenece" in wrong.message.replies[-1]
-    await store.conn.execute("UPDATE pending_approvals SET expires_at = ?", (time.time() - 1,))
-    await store.conn.commit()
-    expired = FakeUpdate()
-    await dispatcher.confirm(expired, code)
-    assert "expirada" in expired.message.replies[-1]
-    assert client.mutations == []
+    # create_flow ejecuta directo en ASSISTED_EXECUTION
+    assert len(client.mutations) == 1
+    assert client.mutations[0][0] == "create_flow"
     await store.close()
 
 

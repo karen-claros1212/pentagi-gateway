@@ -15,7 +15,7 @@ from ..pentagi.client import PentagiClient
 class CommandHandlers:
     """Natural language, callbacks and fallback commands."""
 
-    def __init__(self, client: PentagiClient, dispatcher: Dispatcher) -> None:
+    def __init__(self, client: PentagiClient | None, dispatcher: Dispatcher) -> None:
         self._client = client
         self._dispatch = dispatcher
 
@@ -58,7 +58,7 @@ class CommandHandlers:
         # New UI screen callbacks
         ui_mapping = {
             "home": ("help_ui", {}),
-            "new_flow": ("help_ui", {"screen": "new_flow_draft"}),
+            "new_flow": ("new_flow_draft", {}),
             "flows": ("list_flows", {}),
             "providers": ("list_providers", {}),
             "templates": ("apply_template", {}),
@@ -74,6 +74,10 @@ class CommandHandlers:
             "status": ("get_flow_status", {}),
             "assistant": ("view_assistant", {}),
             "help": ("help", {}),
+            "approve_assistant": ("create_assistant", {}),
+            "approve_create_assistant": ("create_assistant", {}),
+            "confirm_new_flow": ("confirm_new_flow", {}),
+            "select_assistant": ("select_assistant", {}),
         }
         if action.startswith("select_provider:"):
             provider_name = action.split(":", 1)[1] if ":" in action else ""
@@ -214,7 +218,7 @@ class CommandHandlers:
 
 def help_text() -> str:
     return (
-        "🤖 PentAGI Gateway — natural language first\n\n"
+        "🤖 PentAGI Gateway — natural language first (READ_ONLY)\n\n"
         "Escribe de forma natural: 'muéstrame los flows', 'abre flow 123', "
         "'resume el flow', 'qué encontró'. Los botones son la vía principal para acciones comunes.\n\n"
         "Los comandos son fallback técnico: /flows /flow /tasks /logs /terminal /bind /summary /report "

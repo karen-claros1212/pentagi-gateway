@@ -6,9 +6,7 @@ import logging
 
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
-from ..core.auth import AuthProvider
 from ..core.dispatcher import Dispatcher
-from ..core.session import SessionStore
 from ..pentagi.client import PentagiClient
 from ..security import redact
 from .handlers import CommandHandlers
@@ -22,13 +20,10 @@ class TelegramBot:
     def __init__(
         self,
         token: str,
-        client: PentagiClient,
-        auth: AuthProvider,
-        store: SessionStore,
         dispatcher: Dispatcher,
         allowed_users: list[int],
+        client: PentagiClient | None = None,
     ) -> None:
-        del auth, store
         self._allowed = set(allowed_users)
         self._handlers = CommandHandlers(client, dispatcher)
         self._app = Application.builder().token(token).build()

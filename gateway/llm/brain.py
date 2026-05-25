@@ -16,7 +16,7 @@ from .schemas import MUTATION_INTENTS, Intent, IntentDecision
 
 
 NO_ACTIVE_FLOW_TEXT = "No tengo un flow activo seleccionado. Puedo mostrarte los flows disponibles."
-UNKNOWN_GUIDANCE = "No entendí. Puedes pedirme: mostrar flows, abrir flow <id>, resumir el flow activo o revisar hallazgos."
+UNKNOWN_GUIDANCE = "No entendí. Puedes pedirme: mostrar flows disponibles, abrir flow <id>, resumir el flow activo o revisar hallazgos."
 
 
 class BrainContext:
@@ -132,16 +132,18 @@ class Brain:
                 return IntentDecision(intent=Intent.HELP_UI, parameters={"screen": context.last_screen})
             return IntentDecision(intent=Intent.HELP)
 
-        if "proveedor" in low or "providers" in low:
-            return IntentDecision(intent=Intent.LIST_PROVIDERS)
         if "seleccionar proveedor" in low or "selecciona proveedor" in low:
             return IntentDecision(intent=Intent.SET_PROVIDER, parameters={"provider": _extract_provider(t)})
+        if "proveedor" in low or "providers" in low:
+            return IntentDecision(intent=Intent.LIST_PROVIDERS)
         if "plantilla" in low or "template" in low:
             return IntentDecision(intent=Intent.APPLY_TEMPLATE, parameters={"template_id": _extract_template_id(t)})
 
         # Flow listing / status
         if "muéstrame los flows" in low or "lista flows" in low or "flujos" in low or "flows" in low:
             return IntentDecision(intent=Intent.LIST_FLOWS)
+        if "tareas" in low or "task" in low:
+            return IntentDecision(intent=Intent.GET_TASKS)
         if any(x in low for x in ("abre este flow", "abre flow", "abrir flow", "bind", "vincula")) and flow_id:
             return IntentDecision(intent=Intent.BIND_FLOW, flow_ref=flow_id)
         if any(x in low for x in ("qué está haciendo", "que esta haciendo", "estado", "status")):
@@ -154,12 +156,14 @@ class Brain:
             return IntentDecision(intent=Intent.SUBMIT_DRAFT, action="create_flow", parameters={"prompt": t})
 
         # Terminal / assistant views
-        if any(x in low for x in ("terminal", "ver terminal", "consola")) and flow_id:
-            return IntentDecision(intent=Intent.VIEW_TERMINAL, flow_ref=flow_id)
-        if any(x in low for x in ("asistente", "assistant", "ver assistant", "assistant mode")):
-            return IntentDecision(intent=Intent.VIEW_ASSISTANT)
+        if "logs" in low or "mensaje" in low or "mensajes" in low:
+            return IntentDecision(intent=Intent.GET_LOGS)
+        if "terminal" in low or "consola" in low:
+            return IntentDecision(intent=Intent.VIEW_TERMINAL, flow_ref=flow_id or context.active_flow_id)
         if "envía al assistant" in low or "envia al assistant" in low or "pregunta al assistant" in low:
             return IntentDecision(intent=Intent.SEND_ASSISTANT_MESSAGE, action="call_assistant", parameters={"message": t})
+        if any(x in low for x in ("asistente", "assistant", "ver assistant", "assistant mode")):
+            return IntentDecision(intent=Intent.VIEW_ASSISTANT)
 
         # Existing intents (maintain backward compat)
         if "resume" in low or "resumen" in low or "summary" in low:
@@ -193,7 +197,13 @@ class Brain:
         # SMALLTALK: saludos, agradecimientos, charla informal
         smalltalk_keywords = ["hola","buenas","buen día","buenas tardes","gracias","ok","okey","vale","de acuerdo","perfecto","listo","cómo estás","qué tal","bien y tú","hey","oye","saludos"]
         if any(k in low for k in smalltalk_keywords):
-            return IntentDecision(intent=Intent.SMALLTALK, user_response="¡Hola! ¿En qué puedo ayudarte con PentAGI hoy?")
+            return IntentDecision(intent=Intent.GREETING, user_response="¡Hola! Bienvenido, operador. PentAGI Gateway listo.")
+        if any(x in low for x in ("quién eres", "que eres", "identity", "about you")):
+            return IntentDecision(intent=Intent.OPERATOR_IDENTITY, user_response="Soy PentAGI Gateway, tu asistente de orquestación de flows de ciberseguridad.")
+        if any(x in low for x in ("qué puedes hacer", "que puedes hacer", "capabilities", "features")):
+            return IntentDecision(intent=Intent.OPERATOR_CAPABILITIES, user_response="Puedo listar flows, activar/proveedores, crear flows, enviar inputs, ver logs, terminal y resumir hallazgos.")
+        if any(x in low for x in ("qué haces", "que haces", "intro", "introducción", "introduccion")):
+            return IntentDecision(intent=Intent.OPERATOR_INTRO)
         return IntentDecision(intent=Intent.UNKNOWN, user_response=UNKNOWN_GUIDANCE)
 
 
@@ -223,8 +233,7 @@ def _extract_provider(text: str) -> str:
 
 
 def _extract_template_id(text: str) -> str:
-    """Extract template ID from text."""
-    match = re.search(r"(?:plantilla|template)\s*[:#=]?\s*(\w+)", text, flags=re.IGNORECASE)
+    match = re.search(r"(?:plantilla|template)\s*[:#=]?\s*([\w-]+)", text, flags=re.IGNORECASE)
     return match.group(1) if match else ""
 
 

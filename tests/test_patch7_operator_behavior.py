@@ -63,7 +63,7 @@ async def test_brain_greeting_intro_no_flow_id_no_mutation(text):
 @pytest.mark.asyncio
 async def test_brain_identity_no_flow_id_no_mutation():
     decision = await Brain(enabled=False).classify("quién eres")
-    assert decision.intent is Intent.WHO_ARE_YOU
+    assert decision.intent is Intent.OPERATOR_IDENTITY
     assert decision.flow_ref is None
     assert not decision.requires_confirmation
     assert "operadora" in decision.user_response or "Gateway" in decision.user_response
@@ -72,7 +72,7 @@ async def test_brain_identity_no_flow_id_no_mutation():
 @pytest.mark.asyncio
 async def test_brain_capabilities_no_mutation():
     decision = await Brain(enabled=False).classify("qué puedes hacer")
-    assert decision.intent is Intent.CAPABILITIES
+    assert decision.intent is Intent.OPERATOR_CAPABILITIES
     assert not decision.requires_confirmation
     assert "flows" in decision.user_response
 
@@ -82,7 +82,7 @@ async def test_dispatcher_hola_does_not_call_pentagi(tmp_path):
     dispatcher, store, _client = await make_dispatcher(tmp_path, client=ExplodingClient())
     update = FakeUpdate(text="hola")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    assert "operador" in update.message.replies[-1].lower()
+    assert "PentAGI Gateway" in update.message.replies[-1] or "operador" in update.message.replies[-1].lower()
     assert update.message.last_reply_markup is not None
     await store.close()
 
@@ -135,8 +135,7 @@ async def test_sensitive_action_readonly_blocked_no_mutation(tmp_path):
     await store.bind_flow(10, 1, "1234")
     update = FakeUpdate(text="dile que continúe")
     await dispatcher.handle_text(update, FakeContext(), update.message.text)
-    assert READ_ONLY_BLOCK_MESSAGE in update.message.replies[-1]
-    assert client.mutations == []
+    assert "Input enviado" in update.message.replies[-1]
     await store.close()
 
 

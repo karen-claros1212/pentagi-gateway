@@ -8,12 +8,7 @@ import sys
 from pathlib import Path
 
 from .config import Settings
-from .core.auth import AuthProvider
-from .core.dispatcher import Dispatcher
-from .core.session import SessionStore
-from .pentagi.client import PentagiClient
-from .security.rate_limiter import RateLimiter
-from .telegram.bot import TelegramBot
+from .core.service_manager import ServiceManager
 
 logger = logging.getLogger("gateway")
 
@@ -38,12 +33,9 @@ async def amain() -> None:
     logger.info("settings=%s", settings)
     Path(settings.gateway_sqlite_path).parent.mkdir(parents=True, exist_ok=True)
 
-    store = SessionStore(settings.gateway_sqlite_path)
-    await store.open()
-    client = PentagiClient(settings.graphql_url, settings.pentagi_api_token, settings.pentagi_verify_tls)
-    auth = AuthProvider(settings.allowed_user_ids, settings.allowed_chat_ids)
-    dispatcher = Dispatcher(auth, store, RateLimiter(), settings=settings, client=client)
-    bot = TelegramBot(settings.telegram_bot_token, client, auth, store, dispatcher, settings.allowed_user_ids)
+    services = ServiceManager(settings)
+    await services.open()
+    bot = services.bot
 
     try:
         await bot.start_polling()
@@ -52,9 +44,7 @@ async def amain() -> None:
     except asyncio.CancelledError:
         pass
     finally:
-        await bot.stop()
-        await client.close()
-        await store.close()
+        await services.close()
 
 
 def main() -> None:

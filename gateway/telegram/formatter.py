@@ -44,29 +44,26 @@ def provider_label(provider: dict[str, Any] | str | None) -> str:
 # ---------------------------------------------------------------------------
 
 
-def home_screen(session: TelegramSession, providers: list[dict[str, Any]], templates: list[dict[str, Any]]) -> tuple[str, InlineKeyboardMarkup]:
-    """Pantalla principal con navegación a todas las secciones."""
-    parts = ["🏠 *PentAGI Gateway*"]
+def home_screen(session: TelegramSession, providers: list[dict[str, Any]], templates: list[dict[str, Any]], gateway_mode: str | None = None) -> tuple[str, InlineKeyboardMarkup]:
+    """Pantalla principal con navegación directa a todas las acciones de PentAGI."""
+    mode_label = (gateway_mode or session.mode or "ASSISTED_EXECUTION").upper()
+    parts = [f"🏠 *PentAGI Gateway* [{mode_label}]"]
     if session.active_flow_id:
         status = session.active_flow_status or "unknown"
-        parts.append(f"Flow activo: `{session.active_flow_id}` [{status}]")
+        parts.append(f"⚙️ Flow activo: `{session.active_flow_id}` [{status}]")
     else:
-        parts.append("Sin flow activo.")
-    if session.selected_provider:
-        parts.append(f"Provider: {session.selected_provider}")
-    text = "\n".join(parts)
+        parts.append("Sin flow activo seleccionado.")
+    text = "\\n".join(parts)
     kb = [
-        [InlineKeyboardButton("📋 Flows", callback_data="ui:flows"),
-         InlineKeyboardButton("🔌 Providers", callback_data="ui:providers")],
-        [InlineKeyboardButton("✅ Nuevo Flow", callback_data="ui:new_flow"),
-         InlineKeyboardButton("📝 Templates", callback_data="ui:templates")],
+        [InlineKeyboardButton("💬 Asistente", callback_data="ui:assistant"),
+         InlineKeyboardButton("▶️ Trabajar", callback_data="ui:new_flow")],
+        [InlineKeyboardButton("📊 Flows", callback_data="ui:flows"),
+         InlineKeyboardButton("📋 Tareas", callback_data="ui:tasks")],
+        [InlineKeyboardButton("🧾 Logs", callback_data="ui:logs"),
+         InlineKeyboardButton("🖥 Terminal", callback_data="ui:terminal")],
+        [InlineKeyboardButton("⏹ Stop", callback_data="ui:stop_flow"),
+         InlineKeyboardButton("❓ Ayuda", callback_data="ui:help")],
     ]
-    if session.active_flow_id:
-        kb.append([
-            InlineKeyboardButton("📊 Estado", callback_data="ui:status"),
-            InlineKeyboardButton("🛑 Detener", callback_data="ui:stop_flow"),
-        ])
-    kb.append([InlineKeyboardButton("❓ Ayuda", callback_data="ui:help")])
     return text, InlineKeyboardMarkup(kb)
 
 
@@ -384,8 +381,17 @@ def format_terminal_logs(entries: list[dict[str, Any]]) -> str:
 def format_summary(flow: dict[str, Any] | None, tasks: list[dict[str, Any]], logs: list[dict[str, Any]]) -> str:
     title = flow.get("title") or flow.get("name") if flow else "flow"
     status = flow.get("status") if flow else "unknown"
+    status_lower = str(status).lower()
+    if any(x in status_lower for x in ("run", "running", "active", "working")):
+        status_norm = "marcha"
+    elif any(x in status_lower for x in ("wait", "waiting", "input", "paused")):
+        status_norm = "READ_ONLY"
+    elif any(x in status_lower for x in ("finish", "finished", "done", "stopped", "failed", "error")):
+        status_norm = "reporte"
+    else:
+        status_norm = str(status)
     recent = " | ".join(redact(str(x.get("message") or x.get("content") or x.get("text") or x.get("result") or ""))[:90] for x in (logs[-3:] or tasks[-3:]))
-    return truncate(f"Resumen de {title}: estado={status}; tareas={len(tasks)}; reciente: {recent or 'sin actividad reciente'}")
+    return truncate(f"Resumen de {title}: estado={status_norm}; tareas={len(tasks)}; reciente: {recent or 'sin actividad reciente'}")
 
 
 def format_findings(tasks: list[dict[str, Any]], logs: list[dict[str, Any]]) -> str:
@@ -407,6 +413,30 @@ def format_approval(approval: Approval) -> str:
 
 
 def format_mutation_result(action: str, result: dict[str, Any]) -> str:
+    if action == "create_assistant":
+        assistant = result.get("assistant", {})
+        if assistant:
+            return truncate(f"✅ Assistant creado:\nID: {assistant.get('id', 'N/A')}\nTitle: {assistant.get('title', 'N/A')}\nStatus: {assistant.get('status', 'N/A')}")
+        return truncate(f"❌ Error creando assistant: {result}")
+    if action == "call_assistant":
+        if result.get("success"):
+            output = result.get("output", "")
+            msg = result.get("message", "")
+            detail = f"✅ Assistant call ejecutado.\n{msg}" if msg else "✅ Assistant call ejecutado."
+            if output:
+                detail += f"\n\n{output[:500]}"
+            return truncate(detail)
+        return truncate(f"❌ Assistant call failed: {result}")
+    if action == "stop_assistant":
+        assistant = result.get("stopAssistant", result)
+        if isinstance(assistant, dict) and assistant.get("id"):
+            return truncate(f"✅ Assistant stopped: {assistant.get('title', 'N/A')}")
+        return truncate(f"❌ Error stopping assistant: {result}")
+    if action == "delete_assistant":
+        status = result.get("deleteAssistant", "unknown")
+        if status == "success":
+            return "✅ Assistant deleted successfully."
+        return f"❌ Delete assistant failed: {status}"
     return truncate(f"✅ Mutación ejecutada: {action}\n{result}")
 
 

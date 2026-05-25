@@ -49,3 +49,56 @@ mutation DeleteFlow($flowId: ID!) {
   deleteFlow(flowId: $flowId)
 }
 """
+
+CREATE_ASSISTANT_MUTATION = """
+mutation CreateAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean) {
+  createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents) {
+    flow {
+      id
+      title
+      status
+    }
+    assistant {
+      id
+      title
+      status
+      provider {
+        name
+        type
+      }
+      flowId
+      useAgents
+      createdAt
+    }
+  }
+}
+"""
+
+CALL_ASSISTANT_MUTATION = """
+mutation CallAssistant($flowId: ID!, $assistantId: ID!, $input: String!, $useAgents: Boolean) {
+  callAssistant(flowId: $flowId, assistantId: $assistantId, input: $input, useAgents: $useAgents)
+}
+"""
+
+STOP_ASSISTANT_MUTATION = """
+mutation StopAssistant($flowId: ID!, $assistantId: ID!) {
+  stopAssistant(flowId: $flowId, assistantId: $assistantId) {
+    id
+    title
+    status
+    provider {
+      name
+      type
+    }
+    flowId
+    useAgents
+    createdAt
+  }
+}
+"""
+
+DELETE_ASSISTANT_MUTATION = """
+mutation DeleteAssistant($flowId: ID!, $assistantId: ID!) {
+  deleteAssistant(flowId: $flowId, assistantId: $assistantId)
+}
+"""

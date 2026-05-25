@@ -8,6 +8,8 @@ from typing import Any
 
 import aiosqlite
 
+from .interfaces import ISessionStore
+
 
 @dataclass
 class TelegramSession:
@@ -18,10 +20,16 @@ class TelegramSession:
     mode: str = "READ_ONLY"
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
-    # UI state fields (patch 8)
+    # UI state fields (patch 8 + state machine)
+    ui_mode: str = "home"  # "home" | "readonly" | "assistant" | "flow_draft" | "flow_control"
     active_flow_status: str | None = None
     selected_provider: str | None = None
-    selected_assistant_id: str | None = None
+    active_assistant_id: str | None = None  # Real assistant ID from createAssistant
+    assistant_use_agents: bool = False  # Whether assistant uses agents mode
+    selected_assistant_id: str | None = None  # Legacy: selected from list
+    assistant_approved: bool = False  # Assistant session approved (allows callAssistant)
+    assistant_approval_scope: str | None = None  # "assistant_session" or None
+    assistant_approval_expires: float | None = None  # timestamp
     draft_message: str | None = None
     draft_template_id: str | None = None
     last_screen: str = "home"
@@ -40,7 +48,7 @@ class AuditEvent:
     created_at: float = field(default_factory=time.time)
 
 
-class SessionStore:
+class SessionStore(ISessionStore):
     """SQLite-based session, audit, rate-limit and approval storage."""
 
     def __init__(self, db_path: str) -> None:
@@ -66,8 +74,14 @@ class SessionStore:
                 mode TEXT NOT NULL DEFAULT 'READ_ONLY',
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
+                ui_mode TEXT NOT NULL DEFAULT 'home',
                 active_flow_status TEXT,
                 selected_provider TEXT,
+                active_assistant_id TEXT,
+                assistant_use_agents INTEGER NOT NULL DEFAULT 0,
+                assistant_approved INTEGER NOT NULL DEFAULT 0,
+                assistant_approval_scope TEXT,
+                assistant_approval_expires REAL,
                 selected_assistant_id TEXT,
                 draft_message TEXT,
                 draft_template_id TEXT,
@@ -120,8 +134,14 @@ class SessionStore:
         for row in await cursor.fetchall():
             existing_cols.add(row["name"])
         ui_columns = {
+            "ui_mode": "TEXT NOT NULL DEFAULT 'home'",
             "active_flow_status": "TEXT",
             "selected_provider": "TEXT",
+            "active_assistant_id": "TEXT",
+            "assistant_use_agents": "INTEGER NOT NULL DEFAULT 0",
+            "assistant_approved": "INTEGER NOT NULL DEFAULT 0",
+            "assistant_approval_scope": "TEXT",
+            "assistant_approval_expires": "REAL",
             "selected_assistant_id": "TEXT",
             "draft_message": "TEXT",
             "draft_template_id": "TEXT",
@@ -161,17 +181,26 @@ class SessionStore:
             """INSERT INTO telegram_sessions (
                    chat_id, user_id, role, active_flow_id, mode,
                    created_at, updated_at,
-                   active_flow_status, selected_provider, selected_assistant_id,
+                   ui_mode, active_flow_status, selected_provider,
+                   active_assistant_id, assistant_use_agents, assistant_approved,
+                   assistant_approval_scope, assistant_approval_expires,
+                   selected_assistant_id,
                    draft_message, draft_template_id, last_screen, last_snapshot_at
                )
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(chat_id, user_id) DO UPDATE SET
                    role=excluded.role,
                    active_flow_id=excluded.active_flow_id,
                    mode=excluded.mode,
                    updated_at=excluded.updated_at,
+                   ui_mode=excluded.ui_mode,
                    active_flow_status=excluded.active_flow_status,
                    selected_provider=excluded.selected_provider,
+                   active_assistant_id=excluded.active_assistant_id,
+                   assistant_use_agents=excluded.assistant_use_agents,
+                   assistant_approved=excluded.assistant_approved,
+                   assistant_approval_scope=excluded.assistant_approval_scope,
+                   assistant_approval_expires=excluded.assistant_approval_expires,
                    selected_assistant_id=excluded.selected_assistant_id,
                    draft_message=excluded.draft_message,
                    draft_template_id=excluded.draft_template_id,
@@ -185,8 +214,14 @@ class SessionStore:
                 session.mode,
                 session.created_at,
                 session.updated_at,
+                session.ui_mode,
                 session.active_flow_status,
                 session.selected_provider,
+                session.active_assistant_id,
+                1 if session.assistant_use_agents else 0,
+                1 if session.assistant_approved else 0,
+                session.assistant_approval_scope,
+                session.assistant_approval_expires,
                 session.selected_assistant_id,
                 session.draft_message,
                 session.draft_template_id,
