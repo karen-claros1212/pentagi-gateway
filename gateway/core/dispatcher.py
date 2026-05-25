@@ -248,7 +248,7 @@ class Dispatcher:
                     "flow_id": session.active_flow_id,
                     "assistant_id": session.active_assistant_id,
                     "input": text,
-                    "use_agents": session.assistant_use_agents,
+                    "use_agents": bool(session.assistant_use_agents),
                 })
                 return
 
@@ -639,7 +639,7 @@ class Dispatcher:
                         "flow_id": flow_id,
                         "model_provider": session.selected_provider or "qwen",
                         "input": session.draft_message or "",
-                        "use_agents": session.assistant_use_agents,
+                        "use_agents": bool(session.assistant_use_agents),
                     })
                     assistant_data = result.get("assistant", {})
                     if assistant_data and assistant_data.get("id"):
@@ -690,7 +690,7 @@ class Dispatcher:
                     "flow_id": session.active_flow_id,
                     "model_provider": session.selected_provider or "qwen",
                     "input": session.draft_message or "",
-                    "use_agents": session.assistant_use_agents,
+                    "use_agents": bool(session.assistant_use_agents),
                 })
                 return
 
@@ -704,7 +704,7 @@ class Dispatcher:
                     "flow_id": flow_id,
                     "assistant_id": assistant_id,
                     "input": payload.get("input", ""),
-                    "use_agents": session.assistant_use_agents,
+                    "use_agents": bool(session.assistant_use_agents),
                 })
                 return
 
@@ -1016,9 +1016,8 @@ class Dispatcher:
                 flow_id=payload["flow_id"],
                 model_provider=payload.get("model_provider", "qwen"),
                 input_text=payload.get("input", ""),
-                use_agents=payload.get("use_agents", False),
+                use_agents=bool(payload.get("use_agents", False)),
             )
-            # Extract assistant from FlowAssistant { flow, assistant }
             assistant_data = result.get("assistant", {})
             return {"assistant": assistant_data, "raw": result, "approved": True}
         if action == "call_assistant":
@@ -1026,7 +1025,7 @@ class Dispatcher:
                 flow_id=payload["flow_id"],
                 assistant_id=payload["assistant_id"],
                 input_text=payload.get("input", ""),
-                use_agents=payload.get("use_agents", False),
+                use_agents=bool(payload.get("use_agents", False)),
             )
         if action == "stop_assistant":
             return await self._client.stop_assistant(
