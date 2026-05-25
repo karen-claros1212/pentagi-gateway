@@ -9,3 +9,4 @@ logs/
 data/*.sqlite
 .pytest_cache/
 .ruff_cache/
+*.log
